@@ -1,9 +1,18 @@
 const BASE = '/api'
 
 async function req(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } }
+  const token = localStorage.getItem('erp_token')
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = 'Bearer ' + token
+  const opts = { method, headers }
   if (body !== undefined) opts.body = JSON.stringify(body)
   const r = await fetch(BASE + path, opts)
+  if (r.status === 401) {
+    localStorage.removeItem('erp_token')
+    localStorage.removeItem('erp_user')
+    window.location.reload()
+    return
+  }
   if (!r.ok) {
     const err = await r.json().catch(() => ({}))
     throw new Error(err.detail || `HTTP ${r.status}`)

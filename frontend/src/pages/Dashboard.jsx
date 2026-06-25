@@ -1,9 +1,12 @@
-import { StatCard, Badge, fmtW, calcItems } from '../components/UI.jsx'
+import { StatCard, Badge, fmtW } from '../components/UI.jsx'
+import { useData } from '../context/DataContext.jsx'
+import { calcItems } from '../utils/index.js'
 
 const CONTRACT_STATUS = { reviewing:'검토중', waiting_sign:'서명대기', active:'계약중', renewing:'갱신예정', expired:'만료', terminated:'해지' }
 const CONTRACT_COLOR = { reviewing:'var(--muted)', waiting_sign:'var(--accent)', active:'var(--success)', renewing:'var(--accent2)', expired:'var(--warn)', terminated:'var(--danger)' }
 
-export default function Dashboard({ data, onNav, renderLayout }) {
+export default function Dashboard({ onNav, renderLayout }) {
+  const { data } = useData()
   const { quotations, contracts, orders, taxes, customers } = data
   const totalQ = quotations.reduce((s,q)=>s+calcItems(q.items||[]).total,0)
   const totalC = contracts.reduce((s,c)=>s+(c.amount||0),0)

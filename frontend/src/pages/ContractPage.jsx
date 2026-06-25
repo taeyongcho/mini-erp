@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary, toast, fmt, fmtW, calcItems, today, dateAdd } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
+import { useData } from '../context/DataContext.jsx'
+import { CONTRACT_STATUSES } from '../constants/index.js'
+import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
 
 const STATUSES = [
   { value: 'reviewing',     label: '검토중',   color: 'rgba(100,116,139,.2)',   text: 'var(--muted)' },
@@ -23,26 +26,45 @@ function DdayBadge({ days }) {
   return <span style={{ fontSize:11, color:'var(--muted)', fontFamily:'var(--mono)' }}>D-{days}</span>
 }
 
-function nextId(contracts) {
-  const yr = new Date().getFullYear()
-  const max = contracts.filter(c => c.id.startsWith('CT-'+yr))
-    .reduce((m,c) => { const n = +c.id.split('-')[2]; return n>m?n:m }, 0)
-  return `CT-${yr}-${String(max+1).padStart(3,'0')}`
+function printDoc() {
+  const content = document.getElementById('print-area').innerHTML
+  const win = window.open('', '_blank')
+  win.document.write(`
+    <html><head>
+    <title>문서 출력</title>
+    <style>
+      body { font-family: 'Noto Sans KR', sans-serif; color: #000; background: #fff; padding: 20px; }
+      table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+      th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
+      th { background: #f5f5f5; }
+      h2 { text-align: center; }
+      .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+      .info-box { border: 1px solid #ccc; padding: 10px; }
+      @media print { button { display: none; } }
+    </style>
+    </head><body>
+    ${content}
+    <script>window.onload = () => window.print()<\/script>
+    </body></html>`)
+  win.document.close()
 }
 
 const DEFAULT_PAYMENT = '계약금 30%, 중도금 40%, 잔금 30%'
 const DEFAULT_DELIVERY = '계약 후 30일 이내 납품'
 const DEFAULT_WARRANTY = '납품일로부터 1년간 하자보증'
 
-export default function ContractPage({ data, refresh, onNav, renderLayout }) {
+export default function ContractPage({ onNav, renderLayout }) {
+  const { data, refresh, showToast } = useData()
   const { contracts, customers, quotations } = data
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({})
   const [items, setItems] = useState([])
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState('info') // info | terms | items
+  const [tab, setTab] = useState('info')
 
   const openForm = (id, fromQuotationId) => {
     const c = id ? contracts.find(x => x.id === id) : null
@@ -60,7 +82,7 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
         amount: calcItems(q.items||[]).total,
       } : {}
       setForm({
-        id: nextId(contracts),
+        id: generateId('CT', contracts),
         date: today(),
         start_date: today(),
         end_date: dateAdd(today(), 365),
@@ -82,8 +104,8 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
   }
 
   const save = async () => {
-    if (!form.customer_id) return toast('거래처를 선택하세요', 'error')
-    if (!form.title) return toast('계약명을 입력하세요', 'error')
+    if (!form.customer_id) return showToast('거래처를 선택하세요', 'error')
+    if (!form.title) return showToast('계약명을 입력하세요', 'error')
     setSaving(true)
     try {
       const its = items.filter(i => i.name)
@@ -97,9 +119,9 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
       }
       if (modal.id) await api.updateContract(modal.id, payload)
       else await api.createContract(payload)
-      toast(modal.id ? '계약서가 수정되었습니다' : '계약서가 저장되었습니다')
+      showToast(modal.id ? '계약서가 수정되었습니다' : '계약서가 저장되었습니다')
       await refresh(); setModal(null)
-    } catch(e) { toast(e.message, 'error') }
+    } catch(e) { showToast(e.message, 'error') }
     setSaving(false)
   }
 
@@ -107,26 +129,23 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
     try {
       await api.updateContractStatus(id, status)
       const label = STATUSES.find(s=>s.value===status)?.label || status
-      toast(`계약 상태가 "${label}"으로 변경되었습니다`)
+      showToast(`계약 상태가 "${label}"으로 변경되었습니다`)
       await refresh()
-    } catch(e) { toast(e.message, 'error') }
+    } catch(e) { showToast(e.message, 'error') }
   }
 
   const del = async (id) => {
     if (!confirm('삭제하시겠습니까?')) return
-    try { await api.deleteContract(id); toast('삭제되었습니다'); await refresh() } catch(e) { toast(e.message, 'error') }
+    try { await api.deleteContract(id); showToast('삭제되었습니다'); await refresh() } catch(e) { showToast(e.message, 'error') }
   }
 
   const convertToOrder = async (c) => {
-    const yr = new Date().getFullYear()
-    const orders = data.orders
-    const max = orders.filter(o=>o.id.startsWith('PO-'+yr)).reduce((m,o)=>{ const n=+o.id.split('-')[2]; return n>m?n:m },0)
-    const oid = `PO-${yr}-${String(max+1).padStart(3,'0')}`
+    const oid = generateId('PO', data.orders)
     try {
       await api.createOrder({ id:oid, date:today(), deliver:dateAdd(today(),14), customer_id:c.customer_id, quotation_id:c.quotation_id||null, contract_id:c.id, status:'ordered', note:`계약 ${c.id} 기반`, items:c.items })
-      toast(`발주서 ${oid} 생성 완료`)
+      showToast(`발주서 ${oid} 생성 완료`)
       await refresh(); onNav('order')
-    } catch(e) { toast(e.message, 'error') }
+    } catch(e) { showToast(e.message, 'error') }
   }
 
   const viewC = (id) => { setModal({ mode:'view', id }) }
@@ -137,10 +156,11 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
     const cu = customers.find(x=>x.id===c.customer_id)||{}
     const matchSearch = cu.name?.includes(search)||c.id.includes(search)||c.title?.includes(search)
     const matchFilter = filter==='all' || c.status===filter
-    return matchSearch && matchFilter
+    const matchFrom = !dateFrom || c.end_date >= dateFrom
+    const matchTo = !dateTo || c.end_date <= dateTo
+    return matchSearch && matchFilter && matchFrom && matchTo
   })
 
-  // 만료 임박 알림 (30일 이내)
   const expiringSoon = contracts.filter(c => c.status==='active' && c.days_left !== null && c.days_left >= 0 && c.days_left <= 30)
 
   const custOpts = customers.map(c=>({value:String(c.id), label:c.name}))
@@ -153,10 +173,30 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
       style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, padding:'9px 12px', color:'var(--text)', fontFamily:'var(--sans)', fontSize:13, outline:'none', width:'100%', resize:'vertical' }} />
   )
 
+  const doExportCSV = () => {
+    exportCSV(`contracts_${today()}.csv`, [
+      {key:'id', label:'번호'},
+      {key:'title', label:'제목'},
+      {key:'customerName', label:'거래처'},
+      {key:'statusLabel', label:'상태'},
+      {key:'start_date', label:'시작일'},
+      {key:'end_date', label:'종료일'},
+      {key:'amount', label:'금액'},
+      {key:'dday', label:'D-day'},
+    ], filtered.map(c => {
+      const cu = customers.find(x=>x.id===c.customer_id)||{}
+      const statusLabel = CONTRACT_STATUSES.find(s=>s.value===c.status)?.label || c.status
+      const dday = c.days_left != null ? (c.days_left < 0 ? `D+${Math.abs(c.days_left)}` : `D-${c.days_left}`) : ''
+      return {...c, customerName:cu.name, statusLabel, dday}
+    }))
+  }
+
   return renderLayout(
-    <Btn variant="primary" onClick={()=>openForm()}>+ 계약서 작성</Btn>,
+    <div style={{display:'flex',gap:8}}>
+      <Btn onClick={doExportCSV}>CSV 내보내기</Btn>
+      <Btn variant="primary" onClick={()=>openForm()}>+ 계약서 작성</Btn>
+    </div>,
     <>
-      {/* 만료 임박 알림 */}
       {expiringSoon.length > 0 && (
         <div style={{ background:'rgba(245,158,11,.1)', border:'1px solid rgba(245,158,11,.3)', borderRadius:8, padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:10 }}>
           <span style={{ fontSize:16 }}>⚠️</span>
@@ -168,11 +208,19 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
 
       <TableWrap title="계약서 목록" count={contracts.length} searchVal={search} onSearch={setSearch}
         filterEl={
-          <select value={filter} onChange={e=>setFilter(e.target.value)}
-            style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 10px', color:'var(--text)', fontSize:12, outline:'none' }}>
-            <option value="all">전체</option>
-            {STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <span style={{color:'var(--muted)',fontSize:12}}>종료일</span>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px',color:'var(--text)',fontSize:12,outline:'none'}} />
+            <span style={{color:'var(--muted)',fontSize:12}}>~</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px',color:'var(--text)',fontSize:12,outline:'none'}} />
+            <select value={filter} onChange={e=>setFilter(e.target.value)}
+              style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, padding:'6px 10px', color:'var(--text)', fontSize:12, outline:'none' }}>
+              <option value="all">전체</option>
+              {STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
         }>
         <thead>
           <tr>
@@ -211,9 +259,8 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
         </tbody>
       </TableWrap>
 
-      {/* ── 작성/수정 모달 ── */}
+      {/* 작성/수정 모달 */}
       <Modal open={modal?.mode==='form'} onClose={()=>setModal(null)} title={modal?.id ? '계약서 수정' : '계약서 작성'} wide>
-        {/* 탭 */}
         <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:20 }}>
           {[['info','기본정보'],['terms','계약조건'],['items','품목명세']].map(([k,l])=>(
             <div key={k} onClick={()=>setTab(k)}
@@ -273,14 +320,13 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
         </div>
       </Modal>
 
-      {/* ── 상세 보기 모달 ── */}
+      {/* 상세 보기 모달 */}
       <Modal open={modal?.mode==='view'} onClose={()=>setModal(null)} title="계약서 상세" wide>
         {c_view && (() => {
           const { supply, vat, total } = calcItems(c_view.items||[])
           return (
             <div>
-              <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:8, padding:24 }}>
-                {/* 헤더 */}
+              <div id="print-area" style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:8, padding:24 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, paddingBottom:20, borderBottom:'1px solid var(--border)' }}>
                   <div>
                     <h1 style={{ fontSize:24, fontWeight:700, marginBottom:4 }}>계약서</h1>
@@ -293,7 +339,6 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
                   </div>
                 </div>
 
-                {/* 기본 정보 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20, padding:16, background:'var(--surface)', borderRadius:6, border:'1px solid var(--border)' }}>
                   <div>
                     <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}>공급자 (갑)</div>
@@ -313,7 +358,6 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
                   </div>
                 </div>
 
-                {/* 품목 */}
                 {(c_view.items||[]).length > 0 && (
                   <div style={{ marginBottom:20 }}>
                     <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.7px', marginBottom:8 }}>계약 품목</div>
@@ -353,7 +397,6 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
                   </div>
                 )}
 
-                {/* 계약 조건 */}
                 {[['결제 조건',c_view.payment_terms],['납품 조건',c_view.delivery_terms],['하자보증',c_view.warranty],['특약사항',c_view.special_terms]].filter(([,v])=>v).map(([k,v])=>(
                   <div key={k} style={{ marginBottom:14, padding:14, background:'var(--surface)', borderRadius:6, border:'1px solid var(--border)' }}>
                     <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.7px', marginBottom:6 }}>{k}</div>
@@ -361,7 +404,6 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
                   </div>
                 ))}
 
-                {/* 서명란 */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginTop:24, padding:16, background:'var(--surface)', borderRadius:6, border:'1px solid var(--border)' }}>
                   {['공급자 (갑)','공급받는자 (을)'].map(label=>(
                     <div key={label} style={{ textAlign:'center' }}>
@@ -372,7 +414,6 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
                 </div>
               </div>
 
-              {/* 상태 변경 버튼 */}
               <div style={{ marginTop:16, padding:14, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8 }}>
                 <div style={{ fontSize:11, color:'var(--muted)', marginBottom:10 }}>상태 변경</div>
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -387,6 +428,7 @@ export default function ContractPage({ data, refresh, onNav, renderLayout }) {
 
               <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:16 }}>
                 <Btn onClick={()=>setModal(null)}>닫기</Btn>
+                <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
                 <Btn variant="primary" onClick={()=>{ setModal(null); openForm(c_view.id) }}>수정</Btn>
                 {c_view.status==='active' && <Btn variant="warn" onClick={()=>{ setModal(null); convertToOrder(c_view) }}>발주서 전환</Btn>}
               </div>

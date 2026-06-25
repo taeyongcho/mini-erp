@@ -1,14 +1,35 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary, toast, fmt, fmtW, calcItems, today } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
+import { useData } from '../context/DataContext.jsx'
+import { TAX_STATUSES } from '../constants/index.js'
+import { generateId, today, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
 
-function nextId(taxes) {
-  const yr = new Date().getFullYear()
-  const max = taxes.filter(t=>t.id.startsWith('TAX-'+yr)).reduce((m,t)=>{ const n=+t.id.split('-')[2]; return n>m?n:m },0)
-  return `TAX-${yr}-${String(max+1).padStart(3,'0')}`
+function printDoc() {
+  const content = document.getElementById('print-area').innerHTML
+  const win = window.open('', '_blank')
+  win.document.write(`
+    <html><head>
+    <title>문서 출력</title>
+    <style>
+      body { font-family: 'Noto Sans KR', sans-serif; color: #000; background: #fff; padding: 20px; }
+      table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+      th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12px; }
+      th { background: #f5f5f5; }
+      h2 { text-align: center; }
+      .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+      .info-box { border: 1px solid #ccc; padding: 10px; }
+      @media print { button { display: none; } }
+    </style>
+    </head><body>
+    ${content}
+    <script>window.onload = () => window.print()<\/script>
+    </body></html>`)
+  win.document.close()
 }
 
-export default function TaxPage({ data, refresh, renderLayout }) {
+export default function TaxPage({ renderLayout }) {
+  const { data, refresh, showToast } = useData()
   const { taxes, customers, orders } = data
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
@@ -18,7 +39,7 @@ export default function TaxPage({ data, refresh, renderLayout }) {
   const [saving, setSaving] = useState(false)
 
   const openForm = () => {
-    setForm({ id:nextId(taxes), date:today(), customer_id:customers[0]?.id||'', order_id:'', status:'pending', note:'' })
+    setForm({ id:generateId('TAX', taxes), date:today(), customer_id:customers[0]?.id||'', order_id:'', status:'pending', note:'' })
     setItems([{name:'',qty:1,price:0,unit:'개'}])
     setModal({mode:'form'})
   }
@@ -30,19 +51,19 @@ export default function TaxPage({ data, refresh, renderLayout }) {
       const { supply, vat } = calcItems(its)
       const payload = {...form, customer_id:+form.customer_id, order_id:form.order_id||null, items:its, supply, vat}
       await api.createTax(payload)
-      toast('세금계산서가 발행되었습니다')
+      showToast('세금계산서가 발행되었습니다')
       await refresh(); setModal(null)
-    } catch(e){ toast(e.message,'error') }
+    } catch(e){ showToast(e.message,'error') }
     setSaving(false)
   }
 
   const issue = async (id) => {
-    try { await api.issueTax(id); toast('발행완료 처리되었습니다'); await refresh() } catch(e){ toast(e.message,'error') }
+    try { await api.issueTax(id); showToast('발행완료 처리되었습니다'); await refresh() } catch(e){ showToast(e.message,'error') }
   }
 
   const del = async (id) => {
     if (!confirm('삭제하시겠습니까?')) return
-    try { await api.deleteTax(id); toast('삭제되었습니다'); await refresh() } catch(e){ toast(e.message,'error') }
+    try { await api.deleteTax(id); showToast('삭제되었습니다'); await refresh() } catch(e){ showToast(e.message,'error') }
   }
 
   const viewT = (id) => setModal({mode:'view', id})
@@ -56,12 +77,32 @@ export default function TaxPage({ data, refresh, renderLayout }) {
   const custOpts = customers.map(c=>({value:String(c.id),label:c.name}))
   const orderOpts = [{value:'',label:'없음'},...orders.map(o=>({value:o.id,label:o.id}))]
 
+  const doExportCSV = () => {
+    exportCSV(`taxes_${today()}.csv`, [
+      {key:'id', label:'번호'},
+      {key:'date', label:'발행일'},
+      {key:'customerName', label:'거래처'},
+      {key:'statusLabel', label:'상태'},
+      {key:'supply', label:'공급가액'},
+      {key:'vat', label:'부가세'},
+      {key:'total', label:'합계'},
+    ], filtered.map(t => {
+      const c = customers.find(x=>x.id===t.customer_id)||{}
+      const statusLabel = TAX_STATUSES.find(s=>s.value===t.status)?.label || t.status
+      return {...t, customerName:c.name, statusLabel, total:(t.supply||0)+(t.vat||0)}
+    }))
+  }
+
   return renderLayout(
-    <Btn variant="primary" onClick={openForm}>+ 세금계산서 발행</Btn>,
+    <div style={{display:'flex',gap:8}}>
+      <Btn onClick={doExportCSV}>CSV 내보내기</Btn>
+      <Btn variant="primary" onClick={openForm}>+ 세금계산서 발행</Btn>
+    </div>,
     <>
       <TableWrap title="세금계산서 목록" count={taxes.length} searchVal={search} onSearch={setSearch}
         filterEl={<select value={filter} onChange={e=>setFilter(e.target.value)} style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px',color:'var(--text)',fontSize:12,outline:'none'}}>
-          <option value="all">전체</option><option value="issued">발행완료</option><option value="pending">미발행</option>
+          <option value="all">전체</option>
+          {TAX_STATUSES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
         </select>}>
         <thead><tr><Th>계산서번호</Th><Th>거래처</Th><Th>발행일</Th><Th>연결발주</Th><Th right>공급가액</Th><Th right>부가세</Th><Th right>합계</Th><Th>상태</Th><Th>액션</Th></tr></thead>
         <tbody>
@@ -91,7 +132,7 @@ export default function TaxPage({ data, refresh, renderLayout }) {
           <FormGroup label="거래처"><Select value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} /></FormGroup>
           <FormGroup label="발행일"><Input type="date" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></FormGroup>
           <FormGroup label="연결 발주서"><Select value={form.order_id||''} onChange={v=>setForm(f=>({...f,order_id:v}))} options={orderOpts} /></FormGroup>
-          <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={[{value:'pending',label:'미발행'},{value:'issued',label:'발행완료'}]} /></FormGroup>
+          <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={TAX_STATUSES} /></FormGroup>
           <FormGroup label="비고"><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
         </FormGrid>
         <LineEditor items={items} onChange={setItems} />
@@ -106,7 +147,7 @@ export default function TaxPage({ data, refresh, renderLayout }) {
       <Modal open={modal?.mode==='view'} onClose={()=>setModal(null)} title="세금계산서 상세" wide>
         {t_view && (
           <div>
-            <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:24}}>
+            <div id="print-area" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:24}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:20}}>
                 <div><h1 style={{fontSize:22,fontWeight:700}}>세금계산서</h1><div style={{fontFamily:'var(--mono)',fontSize:13,color:'var(--accent)'}}>{t_view.id}</div></div>
                 <Badge status={t_view.status}/>
@@ -134,6 +175,7 @@ export default function TaxPage({ data, refresh, renderLayout }) {
             </div>
             <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20}}>
               <Btn onClick={()=>setModal(null)}>닫기</Btn>
+              <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
               {t_view.status==='pending'&&<Btn variant="success" onClick={()=>{setModal(null);issue(t_view.id)}}>발행완료 처리</Btn>}
             </div>
           </div>

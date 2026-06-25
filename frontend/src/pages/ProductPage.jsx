@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, toast, fmtW } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select } from '../components/UI.jsx'
 import { api } from '../api.js'
+import { useData } from '../context/DataContext.jsx'
+import { exportCSV, today, fmtW } from '../utils/index.js'
 
-export default function ProductPage({ data, refresh, renderLayout }) {
+export default function ProductPage({ renderLayout }) {
+  const { data, refresh, showToast } = useData()
   const { products } = data
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({})
@@ -17,25 +20,38 @@ export default function ProductPage({ data, refresh, renderLayout }) {
   const f = (k) => v => setForm(p=>({...p,[k]:v}))
 
   const save = async () => {
-    if (!form.name) return toast('품목명을 입력하세요','error')
+    if (!form.name) return showToast('품목명을 입력하세요','error')
     setSaving(true)
     try {
       const payload = {...form, price:+form.price, tax: form.tax===true||form.tax==='true'}
       if (editId) await api.updateProduct(editId, payload)
       else await api.createProduct(payload)
-      toast(editId?'품목이 수정되었습니다':'품목이 추가되었습니다')
+      showToast(editId?'품목이 수정되었습니다':'품목이 추가되었습니다')
       await refresh(); setModal(false)
-    } catch(e){ toast(e.message,'error') }
+    } catch(e){ showToast(e.message,'error') }
     setSaving(false)
   }
 
   const del = async (id) => {
     if (!confirm('삭제하시겠습니까?')) return
-    try { await api.deleteProduct(id); toast('삭제되었습니다'); await refresh() } catch(e){ toast(e.message,'error') }
+    try { await api.deleteProduct(id); showToast('삭제되었습니다'); await refresh() } catch(e){ showToast(e.message,'error') }
+  }
+
+  const doExportCSV = () => {
+    exportCSV(`products_${today()}.csv`, [
+      {key:'code', label:'코드'},
+      {key:'name', label:'품목명'},
+      {key:'unit', label:'단위'},
+      {key:'price', label:'단가'},
+      {key:'taxLabel', label:'과세여부'},
+    ], products.map(p=>({...p, taxLabel: p.tax ? '과세' : '면세'})))
   }
 
   return renderLayout(
-    <Btn variant="primary" onClick={()=>openForm()}>+ 품목 추가</Btn>,
+    <div style={{display:'flex',gap:8}}>
+      <Btn onClick={doExportCSV}>CSV 내보내기</Btn>
+      <Btn variant="primary" onClick={()=>openForm()}>+ 품목 추가</Btn>
+    </div>,
     <>
       <TableWrap title="품목 목록" count={products.length}>
         <thead><tr><Th>품목코드</Th><Th>품목명</Th><Th>단위</Th><Th right>단가</Th><Th>부가세</Th><Th>액션</Th></tr></thead>
