@@ -27,6 +27,8 @@ export const api = {
   signup: (d) => req('POST', '/auth/signup', d),
   login: (d) => req('POST', '/auth/login', d),
   me: () => req('GET', '/auth/me'),
+  updateProfile: (d) => req('PUT', '/auth/profile', d),
+  changePassword: (d) => req('PUT', '/auth/password', d),
   // 슈퍼어드민
   getCompanies: () => req('GET', '/admin/companies'),
   setCompanyPlan: (id, plan) => req('PATCH', '/admin/companies/' + id + '/plan', { plan }),

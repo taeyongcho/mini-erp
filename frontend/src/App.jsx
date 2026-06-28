@@ -15,6 +15,7 @@ import AccountPage from './pages/AccountPage.jsx'
 import ConvertPage from './pages/ConvertPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
 
 const pages = {
   dashboard: Dashboard,
@@ -28,11 +29,12 @@ const pages = {
   payable: PayablePage,
   account: AccountPage,
   convert: ConvertPage,
+  profile: ProfilePage,
 }
 
 const FREE_DOC_LIMIT = 20
 
-function AppInner({ user, onLogout }) {
+function AppInner({ user, onLogout, onUserUpdate }) {
   const [page, setPage] = useState('dashboard')
   const { data, loading } = useData()
 
@@ -60,7 +62,8 @@ function AppInner({ user, onLogout }) {
 
   const userActions = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
+      <div onClick={() => setPage('profile')} title="내 정보 관리"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3, cursor: 'pointer' }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{user.company}</span>
         <span style={{ fontSize: 11, color: 'var(--muted)' }}>{user.name || user.email}</span>
       </div>
@@ -77,6 +80,8 @@ function AppInner({ user, onLogout }) {
   return (
     <Page
       onNav={setPage}
+      user={user}
+      onUserUpdate={onUserUpdate}
       renderLayout={(actions, children) => (
         <Layout page={page} onNav={setPage} topbarActions={<>{actions}{userActions}</>} badges={badges}>
           {children}
@@ -138,7 +143,7 @@ export default function App() {
 
   return (
     <DataProvider>
-      <AppInner user={user} onLogout={handleLogout} />
+      <AppInner user={user} onLogout={handleLogout} onUserUpdate={setUser} />
       <ToastContainer />
     </DataProvider>
   )

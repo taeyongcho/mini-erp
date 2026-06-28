@@ -122,7 +122,66 @@ def me(payload: dict = Depends(get_current), db: Session = Depends(get_db)):
         raise HTTPException(401, "사용자를 찾을 수 없습니다")
     company = db.query(models.Company).filter_by(id=user.company_id).first()
     return {"email": user.email, "name": user.name, "role": user.role,
-            "company": company.name if company else "", "plan": company.plan if company else "free"}
+            "company": company.name if company else "", "plan": company.plan if company else "free",
+            "biz_no": company.biz_no if company else ""}
+
+
+class ProfileIn(BaseModel):
+    name: str = ""
+    email: str = ""
+    company_name: str = ""
+    biz_no: str = ""
+
+
+class PasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.put("/profile")
+def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Session = Depends(get_db)):
+    if payload.get("role") == "superadmin":
+        raise HTTPException(403, "슈퍼관리자는 정보를 변경할 수 없습니다")
+    user = db.query(models.User).filter_by(id=payload["uid"]).first()
+    if not user:
+        raise HTTPException(401, "사용자를 찾을 수 없습니다")
+    # 이메일 변경 시 중복 체크 (자기 자신 제외)
+    if body.email and body.email != user.email:
+        dup = db.query(models.User).filter(models.User.email == body.email,
+                                           models.User.id != user.id).first()
+        if dup:
+            raise HTTPException(400, "이미 사용 중인 이메일입니다")
+        user.email = body.email
+    if body.name:
+        user.name = body.name
+    company = db.query(models.Company).filter_by(id=user.company_id).first()
+    if company:
+        if body.company_name:
+            company.name = body.company_name
+        # biz_no는 빈값으로도 변경 허용
+        company.biz_no = body.biz_no
+    db.commit(); db.refresh(user)
+    # 이메일/이름이 바뀌면 토큰의 표시정보가 바뀌므로 새 토큰 재발급
+    return {"token": make_token(user),
+            "user": {"email": user.email, "name": user.name, "role": user.role,
+                     "company": company.name if company else "",
+                     "plan": company.plan if company else "free"}}
+
+
+@router.put("/password")
+def change_password(body: PasswordIn, payload: dict = Depends(get_current), db: Session = Depends(get_db)):
+    if payload.get("role") == "superadmin":
+        raise HTTPException(403, "슈퍼관리자는 비밀번호를 변경할 수 없습니다")
+    user = db.query(models.User).filter_by(id=payload["uid"]).first()
+    if not user:
+        raise HTTPException(401, "사용자를 찾을 수 없습니다")
+    if not verify_pw(body.current_password, user.password_hash):
+        raise HTTPException(400, "현재 비밀번호가 올바르지 않습니다")
+    if len(body.new_password) < 6:
+        raise HTTPException(400, "새 비밀번호는 6자 이상이어야 합니다")
+    user.password_hash = hash_pw(body.new_password)
+    db.commit()
+    return {"ok": True}
 
 
 FREE_DOC_LIMIT = 20  # free 플랜 문서(견적+계약+발주+세금계산서) 총합 제한
