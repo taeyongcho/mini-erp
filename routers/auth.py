@@ -136,6 +136,7 @@ def me(payload: dict = Depends(get_current), db: Session = Depends(get_db)):
             "company": company.name if company else "", "plan": company.plan if company else "free",
             "biz_no": company.biz_no if company else "",
             "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}",
+            "contract_format": company.contract_format if company else "CT-{YYYY}-{seq}",
             "smtp_host": company.smtp_host if company else "",
             "smtp_port": company.smtp_port if company else 587,
             "smtp_user": company.smtp_user if company else "",
@@ -150,6 +151,7 @@ class ProfileIn(BaseModel):
     company_name: str = ""
     biz_no: str = ""
     quote_format: str = ""
+    contract_format: str = ""
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
@@ -197,6 +199,8 @@ def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Se
         company.biz_no = body.biz_no
         if body.quote_format:
             company.quote_format = body.quote_format
+        if body.contract_format:
+            company.contract_format = body.contract_format
         company.smtp_host = body.smtp_host
         company.smtp_port = body.smtp_port or 587
         company.smtp_user = body.smtp_user
@@ -212,6 +216,7 @@ def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Se
                      "plan": company.plan if company else "free",
                      "biz_no": company.biz_no if company else "",
                      "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}",
+                     "contract_format": company.contract_format if company else "CT-{YYYY}-{seq}",
                      "smtp_host": company.smtp_host if company else "",
                      "smtp_port": company.smtp_port if company else 587,
                      "smtp_user": company.smtp_user if company else "",

@@ -59,7 +59,6 @@ export function Layout({ page, onNav, topbarActions, children, badges, title }) 
         {nav('receivable','💰','미수금')}
         {nav('payable','💸','미지급금')}
         {nav('account','🏦','계좌관리')}
-        {nav('convert','🔄','견적변환')}
         <div style={s.sideSection}>관리</div>
         {nav('customer','🏢','거래처')}
         {nav('product','🗂️','품목관리')}

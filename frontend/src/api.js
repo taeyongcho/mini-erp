@@ -54,6 +54,7 @@ export const api = {
   createContract: (d) => req('POST', '/contracts', d),
   updateContract: (id, d) => req('PUT', `/contracts/${id}`, d),
   updateContractStatus: (id, status) => req('PATCH', `/contracts/${id}/status`, { status }),
+  sendContract: (id, d) => req('POST', `/contracts/${id}/send`, d),
   deleteContract: (id) => req('DELETE', `/contracts/${id}`),
 
   getOrders: () => req('GET', '/orders'),

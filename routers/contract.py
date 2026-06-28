@@ -148,3 +148,79 @@ def delete_contract(cid: str, db: Session = Depends(get_db), company_id: int = D
     db.delete(c)
     db.commit()
     return {"ok": True}
+
+
+class SendIn(BaseModel):
+    to: str
+    subject: str = ""
+    message: str = ""
+
+
+@router.post("/{cid}/send")
+def send_contract(cid: str, body: SendIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    c = db.query(models.Contract).filter_by(id=cid, company_id=company_id).first()
+    if not c:
+        raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
+    company = db.query(models.Company).filter_by(id=company_id).first()
+    if not (company and company.smtp_host and company.smtp_pass and company.smtp_user):
+        raise HTTPException(400, "내 정보에서 SMTP(메일) 설정을 먼저 완료하세요")
+    if not body.to or "@" not in body.to:
+        raise HTTPException(400, "받는사람 이메일을 올바르게 입력하세요")
+
+    customer = db.query(models.Customer).filter_by(id=c.customer_id, company_id=company_id).first()
+    rows = ""
+    supply = 0
+    for i, it in enumerate(c.items or [], 1):
+        qty = it.get("qty", 0) or 0; price = it.get("price", 0) or 0; amt = qty * price; supply += amt
+        rows += (f"<tr><td>{i}</td><td>{it.get('name','')}</td><td style='text-align:right'>{qty:,}</td>"
+                 f"<td style='text-align:right'>{price:,.0f}</td><td style='text-align:right'>{amt:,.0f}</td></tr>")
+    vat = round(supply * 0.1); total = supply + vat
+    terms = ""
+    for k, v in [("결제 조건", c.payment_terms), ("납품 조건", c.delivery_terms), ("하자보증", c.warranty), ("특약사항", c.special_terms)]:
+        if v:
+            terms += f"<p><b>{k}</b><br>{v}</p>"
+    msg_html = f"<p style='white-space:pre-wrap'>{body.message}</p>" if body.message else ""
+    html = f"""
+    <div style="font-family:'Noto Sans KR',sans-serif;color:#222;max-width:680px">
+      {msg_html}
+      <h2 style="text-align:center">계약서</h2>
+      <p style="text-align:center;color:#666">{c.id} · {c.title or ''}</p>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0">
+        <tr><td style="padding:4px"><b>공급자</b> {company.name}</td>
+            <td style="padding:4px"><b>공급받는자</b> {customer.name if customer else ''}</td></tr>
+        <tr><td style="padding:4px">계약일 {c.date}</td>
+            <td style="padding:4px">계약기간 {c.start_date} ~ {c.end_date}</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse" border="1" cellpadding="6">
+        <thead style="background:#f5f5f5"><tr><th>#</th><th>품목명</th><th>수량</th><th>단가</th><th>금액</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+      <div style="text-align:right;margin-top:12px">
+        <div>공급가액: {supply:,.0f}원</div><div>부가세: {vat:,.0f}원</div>
+        <div style="font-size:16px;font-weight:700">계약금액: {total:,.0f}원</div>
+      </div>
+      {terms}
+    </div>"""
+
+    sender = company.smtp_from or company.smtp_user
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = body.subject or f"[{company.name}] 계약서 {c.id}"
+    msg["From"] = sender
+    msg["To"] = body.to
+    msg.attach(MIMEText(html, "html", "utf-8"))
+    try:
+        if company.smtp_tls:
+            server = smtplib.SMTP(company.smtp_host, company.smtp_port or 587, timeout=20)
+            server.ehlo(); server.starttls(); server.ehlo()
+        else:
+            server = smtplib.SMTP_SSL(company.smtp_host, company.smtp_port or 465, timeout=20)
+        server.login(company.smtp_user, company.smtp_pass)
+        server.sendmail(sender, [body.to], msg.as_string())
+        server.quit()
+    except Exception as e:
+        raise HTTPException(500, f"메일 발송 실패: {e}")
+    return {"ok": True}

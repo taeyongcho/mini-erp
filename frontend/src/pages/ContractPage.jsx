@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, SearchSelect, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { CONTRACT_STATUSES } from '../constants/index.js'
-import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
+import { generateId, formatQuoteNo, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 const STATUSES = [
   { value: 'reviewing',     label: '검토중',   color: 'rgba(100,116,139,.2)',   text: 'var(--muted)' },
@@ -53,9 +53,10 @@ const DEFAULT_PAYMENT = '계약금 30%, 중도금 40%, 잔금 30%'
 const DEFAULT_DELIVERY = '계약 후 30일 이내 납품'
 const DEFAULT_WARRANTY = '납품일로부터 1년간 하자보증'
 
-export default function ContractPage({ onNav, renderLayout }) {
+export default function ContractPage({ onNav, renderLayout, user }) {
   const { data, refresh, showToast } = useData()
   const { contracts, customers, quotations } = data
+  const contractFormat = user?.contract_format || 'CT-{YYYY}-{seq}'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
@@ -65,6 +66,15 @@ export default function ContractPage({ onNav, renderLayout }) {
   const [items, setItems] = useState([])
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState('info')
+  const [sendForm, setSendForm] = useState({ to:'', subject:'', message:'' })
+  const [sending, setSending] = useState(false)
+
+  // 연결 견적서 선택 시 품목/금액/거래처 자동 반영
+  const onPickQuotation = (qid) => {
+    const q = quotations.find(x => x.id === qid)
+    setForm(p => ({ ...p, quotation_id: qid, ...(q ? { customer_id: q.customer_id, amount: calcItems(q.items||[]).total } : {}) }))
+    if (q && q.items?.length) setItems(q.items.map(it => ({ ...it })))
+  }
 
   const openForm = (id, fromQuotationId) => {
     const c = id ? contracts.find(x => x.id === id) : null
@@ -82,7 +92,7 @@ export default function ContractPage({ onNav, renderLayout }) {
         amount: calcItems(q.items||[]).total,
       } : {}
       setForm({
-        id: generateId('CT', contracts),
+        id: formatQuoteNo(contractFormat, contracts),
         date: today(),
         start_date: today(),
         end_date: dateAdd(today(), 365),
@@ -147,6 +157,19 @@ export default function ContractPage({ onNav, renderLayout }) {
       showToast(`발주서 ${oid} 생성 완료`)
       await refresh(); onNav('order')
     } catch(e) { showToast(e.message, 'error') }
+  }
+
+  const openSend = (c) => {
+    const cu = customers.find(x=>x.id===c.customer_id)||{}
+    setSendForm({ to: cu.email||'', subject:`[${user?.company||''}] 계약서 ${c.id}`, message:'' })
+    setModal({mode:'send', id:c.id})
+  }
+  const sendMail = async () => {
+    if (!sendForm.to || !sendForm.to.includes('@')) return showToast('받는사람 이메일을 입력하세요','error')
+    setSending(true)
+    try { await api.sendContract(modal.id, sendForm); showToast('메일이 발송되었습니다'); setModal(null) }
+    catch(e){ showToast(e.message,'error') }
+    setSending(false)
   }
 
   const viewC = (id) => { setModal({ mode:'view', id }) }
@@ -247,6 +270,7 @@ export default function ContractPage({ onNav, renderLayout }) {
                   <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
                     <Btn size="sm" onClick={()=>viewC(c.id)}>보기</Btn>
                     <Btn size="sm" onClick={()=>openForm(c.id)}>수정</Btn>
+                    <Btn size="sm" variant="primary" onClick={()=>openSend(c)}>발송</Btn>
                     {c.status==='active' && <Btn size="sm" variant="warn" onClick={()=>convertToOrder(c)}>발주전환</Btn>}
                     <Btn size="sm" variant="danger" onClick={()=>del(c.id)}>삭제</Btn>
                   </div>
@@ -275,7 +299,7 @@ export default function ContractPage({ onNav, renderLayout }) {
           <FormGrid>
             <FormGroup label="계약번호"><Input value={form.id} readOnly mono /></FormGroup>
             <FormGroup label="거래처">
-              <Select value={String(form.customer_id||'')} onChange={f('customer_id')} options={custOpts} />
+              <SearchSelect value={String(form.customer_id||'')} onChange={f('customer_id')} options={custOpts} placeholder="거래처명 검색" />
             </FormGroup>
             <FormGroup label="계약명" full><Input value={form.title} onChange={f('title')} placeholder="예: IT 시스템 구축 용역계약" /></FormGroup>
             <FormGroup label="계약일"><Input type="date" value={form.date} onChange={f('date')} /></FormGroup>
@@ -285,7 +309,8 @@ export default function ContractPage({ onNav, renderLayout }) {
             <FormGroup label="계약 시작일"><Input type="date" value={form.start_date} onChange={f('start_date')} /></FormGroup>
             <FormGroup label="계약 종료일"><Input type="date" value={form.end_date} onChange={f('end_date')} /></FormGroup>
             <FormGroup label="연결 견적서">
-              <Select value={form.quotation_id||''} onChange={f('quotation_id')} options={quoteOpts} />
+              <SearchSelect value={form.quotation_id||''} onChange={onPickQuotation} options={quoteOpts} placeholder="견적번호/거래처 검색" />
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>선택 시 품목명세가 자동으로 채워집니다</div>
             </FormGroup>
             <FormGroup label="비고"><Input value={form.note} onChange={f('note')} /></FormGroup>
           </FormGrid>
@@ -343,7 +368,7 @@ export default function ContractPage({ onNav, renderLayout }) {
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20, padding:16, background:'var(--surface)', borderRadius:6, border:'1px solid var(--border)' }}>
                   <div>
                     <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}>공급자 (갑)</div>
-                    {[['상호','Axiosoft (주)'],['계약일',c_view.date],['계약기간',`${c_view.start_date} ~ ${c_view.end_date}`]].map(([k,v])=>(
+                    {[['상호',user?.company||'-'],['계약일',c_view.date],['계약기간',`${c_view.start_date} ~ ${c_view.end_date}`]].map(([k,v])=>(
                       <div key={k} style={{ display:'flex', gap:8, fontSize:12, marginBottom:4 }}>
                         <span style={{ color:'var(--muted)', minWidth:70 }}>{k}</span><span>{v}</span>
                       </div>
@@ -430,12 +455,31 @@ export default function ContractPage({ onNav, renderLayout }) {
               <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:16 }}>
                 <Btn onClick={()=>setModal(null)}>닫기</Btn>
                 <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
+                <Btn variant="success" onClick={()=>openSend(c_view)}>메일 발송</Btn>
                 <Btn variant="primary" onClick={()=>{ setModal(null); openForm(c_view.id) }}>수정</Btn>
                 {c_view.status==='active' && <Btn variant="warn" onClick={()=>{ setModal(null); convertToOrder(c_view) }}>발주서 전환</Btn>}
               </div>
             </div>
           )
         })()}
+      </Modal>
+
+      {/* 메일 발송 모달 */}
+      <Modal open={modal?.mode==='send'} onClose={()=>setModal(null)} title="계약서 메일 발송">
+        {!user?.smtp_configured && (
+          <div style={{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--warn)'}}>
+            ⚠️ 메일(SMTP) 설정이 안 되어 있습니다. <b>내 정보 → 메일(SMTP) 설정</b>을 먼저 완료하세요.
+          </div>
+        )}
+        <FormGrid cols={1}>
+          <FormGroup label="받는사람 이메일"><Input type="email" value={sendForm.to} onChange={v=>setSendForm(f=>({...f,to:v}))} placeholder="customer@example.com" /></FormGroup>
+          <FormGroup label="제목"><Input value={sendForm.subject} onChange={v=>setSendForm(f=>({...f,subject:v}))} /></FormGroup>
+          <FormGroup label="메시지 (선택)"><Input value={sendForm.message} onChange={v=>setSendForm(f=>({...f,message:v}))} placeholder="안녕하세요, 계약서를 보내드립니다." /></FormGroup>
+        </FormGrid>
+        <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
+          <Btn onClick={()=>setModal(null)}>취소</Btn>
+          <Btn variant="primary" onClick={sendMail} disabled={sending||!user?.smtp_configured}>{sending?'발송 중...':'메일 발송'}</Btn>
+        </div>
       </Modal>
     </>
   )

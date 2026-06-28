@@ -10,6 +10,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
     company_name: user?.company || '',
     biz_no: user?.biz_no || '',
     quote_format: user?.quote_format || 'Q-{YYYY}-{seq}',
+    contract_format: user?.contract_format || 'CT-{YYYY}-{seq}',
     smtp_host: user?.smtp_host || '',
     smtp_port: user?.smtp_port || 587,
     smtp_user: user?.smtp_user || '',
@@ -31,7 +32,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
       const res = await api.updateProfile(profile)
       // 새 토큰 + 갱신된 user 정보 저장
       if (res.token) localStorage.setItem('erp_token', res.token)
-      const merged = { ...user, ...res.user, biz_no: profile.biz_no, quote_format: profile.quote_format }
+      const merged = { ...user, ...res.user, biz_no: profile.biz_no, quote_format: profile.quote_format, contract_format: profile.contract_format }
       localStorage.setItem('erp_user', JSON.stringify(merged))
       onUserUpdate && onUserUpdate(merged)
       toast('내 정보가 변경되었습니다')
@@ -83,10 +84,15 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
           <FormGroup label="사업자번호">
             <Input value={profile.biz_no} onChange={v => setProfile(p => ({ ...p, biz_no: v }))} />
           </FormGroup>
-          <FormGroup label="견적번호 형식" full>
+          <FormGroup label="견적번호 형식">
             <Input value={profile.quote_format} onChange={v => setProfile(p => ({ ...p, quote_format: v }))} placeholder="Q-{YYYY}-{seq}" mono />
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-              사용 가능: {'{YYYY}'} 연도4자리 · {'{YY}'} 연도2자리 · {'{MM}'} 월 · {'{seq}'} 일련번호 (예: Q-{'{YYYY}'}-{'{seq}'} → Q-{new Date().getFullYear()}-001)
+          </FormGroup>
+          <FormGroup label="계약번호 형식">
+            <Input value={profile.contract_format} onChange={v => setProfile(p => ({ ...p, contract_format: v }))} placeholder="CT-{YYYY}-{seq}" mono />
+          </FormGroup>
+          <FormGroup label="" full>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              사용 가능: {'{YYYY}'} 연도4자리 · {'{YY}'} 연도2자리 · {'{MM}'} 월 · {'{seq}'} 일련번호 (예: CT-{'{YYYY}'}-{'{seq}'} → CT-{new Date().getFullYear()}-001)
             </div>
           </FormGroup>
         </FormGrid>

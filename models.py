@@ -39,6 +39,7 @@ class Company(Base):
     plan = Column(String, default="free")          # free / pro
     active = Column(Boolean, default=True)         # 정지 여부
     quote_format = Column(String, default="Q-{YYYY}-{seq}")  # 견적번호 포맷 템플릿
+    contract_format = Column(String, default="CT-{YYYY}-{seq}")  # 계약번호 포맷 템플릿
     smtp_host = Column(String, default="")
     smtp_port = Column(Integer, default=587)
     smtp_user = Column(String, default="")
