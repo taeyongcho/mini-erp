@@ -57,11 +57,13 @@ export const api = {
   sendContract: (id, d) => req('POST', `/contracts/${id}/send`, d),
   deleteContract: (id) => req('DELETE', `/contracts/${id}`),
 
+  sendOrder: (id, d) => req('POST', `/orders/${id}/send`, d),
   getOrders: () => req('GET', '/orders'),
   createOrder: (d) => req('POST', '/orders', d),
   updateOrder: (id, d) => req('PUT', `/orders/${id}`, d),
   deleteOrder: (id) => req('DELETE', `/orders/${id}`),
 
+  sendTax: (id, d) => req('POST', `/taxes/${id}/send`, d),
   getTaxes: () => req('GET', '/taxes'),
   createTax: (d) => req('POST', '/taxes', d),
   updateTax: (id, d) => req('PUT', `/taxes/${id}`, d),

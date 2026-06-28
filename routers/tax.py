@@ -131,3 +131,43 @@ def delete_tax(tid: str, db: Session = Depends(get_db), company_id: int = Depend
     db.delete(t)
     db.commit()
     return {"ok": True}
+
+
+class SendIn(BaseModel):
+    to: str
+    subject: str = ""
+    message: str = ""
+
+
+@router.post("/{tid}/send")
+def send_tax(tid: str, body: SendIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    from routers.mailer import items_html, send_mail
+    t = db.query(models.TaxInvoice).filter_by(id=tid, company_id=company_id).first()
+    if not t:
+        raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
+    company = db.query(models.Company).filter_by(id=company_id).first()
+    customer = db.query(models.Customer).filter_by(id=t.customer_id, company_id=company_id).first()
+    rows, _ = items_html(t.items)
+    supply = t.supply or 0; vat = t.vat or 0; total = supply + vat
+    msg_html = f"<p style='white-space:pre-wrap'>{body.message}</p>" if body.message else ""
+    html = f"""
+    <div style="font-family:'Noto Sans KR',sans-serif;color:#222;max-width:680px">
+      {msg_html}
+      <h2 style="text-align:center">세금계산서</h2>
+      <p style="text-align:center;color:#666">{t.id}</p>
+      <table style="width:100%;border-collapse:collapse;margin:12px 0">
+        <tr><td style="padding:4px"><b>공급자</b> {company.name}</td>
+            <td style="padding:4px"><b>공급받는자</b> {customer.name if customer else ''}</td></tr>
+        <tr><td style="padding:4px">발행일 {t.date}</td><td style="padding:4px"></td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse" border="1" cellpadding="6">
+        <thead style="background:#f5f5f5"><tr><th>#</th><th>품목명</th><th>수량</th><th>단가</th><th>공급가액</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+      <div style="text-align:right;margin-top:12px">
+        <div>공급가액: {supply:,.0f}원</div><div>세액: {vat:,.0f}원</div>
+        <div style="font-size:16px;font-weight:700">합계: {total:,.0f}원</div>
+      </div>
+    </div>"""
+    send_mail(company, body.to, body.subject or f"[{company.name}] 세금계산서 {t.id}", html)
+    return {"ok": True}

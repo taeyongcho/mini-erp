@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, SearchSelect, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { ORDER_STATUSES } from '../constants/index.js'
-import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
+import { generateId, formatQuoteNo, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 function printDoc() {
   const content = document.getElementById('print-area').innerHTML
@@ -28,21 +28,43 @@ function printDoc() {
   win.document.close()
 }
 
-export default function OrderPage({ renderLayout }) {
+export default function OrderPage({ renderLayout, user }) {
   const { data, refresh, showToast } = useData()
-  const { orders, customers } = data
+  const { orders, customers, quotations } = data
+  const orderFormat = user?.order_format || 'PO-{YYYY}-{seq}'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({})
   const [items, setItems] = useState([])
   const [saving, setSaving] = useState(false)
+  const [sendForm, setSendForm] = useState({ to:'', subject:'', message:'' })
+  const [sending, setSending] = useState(false)
 
   const openForm = (id) => {
     const o = id ? orders.find(x=>x.id===id) : null
-    setForm(o ? {...o} : { id:generateId('PO', orders), date:today(), deliver:dateAdd(today(),14), customer_id:customers[0]?.id||'', status:'ordered', note:'' })
-    setItems(o ? (o.items||[]) : [{name:'',qty:1,price:0,unit:'개'}])
+    setForm(o ? {...o} : { id:formatQuoteNo(orderFormat, orders), date:today(), deliver:dateAdd(today(),14), customer_id:customers[0]?.id||'', quotation_id:'', status:'ordered', note:'' })
+    setItems(o ? (o.items||[]) : [{name:'',qty:'',price:''}])
     setModal({mode:'form', id})
+  }
+
+  const onPickQuotation = (qid) => {
+    const q = quotations.find(x => x.id === qid)
+    setForm(p => ({ ...p, quotation_id: qid, ...(q ? { customer_id: q.customer_id } : {}) }))
+    if (q && q.items?.length) setItems(q.items.map(it => ({ ...it })))
+  }
+
+  const openSend = (o) => {
+    const c = customers.find(x=>x.id===o.customer_id)||{}
+    setSendForm({ to: c.email||'', subject:`[${user?.company||''}] 발주서 ${o.id}`, message:'' })
+    setModal({mode:'send', id:o.id})
+  }
+  const sendMail = async () => {
+    if (!sendForm.to || !sendForm.to.includes('@')) return showToast('받는사람 이메일을 입력하세요','error')
+    setSending(true)
+    try { await api.sendOrder(modal.id, sendForm); showToast('메일이 발송되었습니다'); setModal(null) }
+    catch(e){ showToast(e.message,'error') }
+    setSending(false)
   }
 
   const save = async () => {
@@ -73,6 +95,7 @@ export default function OrderPage({ renderLayout }) {
     return (c.name?.includes(search)||o.id.includes(search)) && (filter==='all'||o.status===filter)
   })
   const custOpts = customers.map(c=>({value:String(c.id),label:c.name}))
+  const quoteOpts = [{value:'',label:'없음'}, ...quotations.map(q=>({value:q.id,label:`${q.id} — ${customers.find(x=>x.id===q.customer_id)?.name||''}`}))]
   const statOpts = ORDER_STATUSES
 
   const doExportCSV = () => {
@@ -118,6 +141,7 @@ export default function OrderPage({ renderLayout }) {
               <Td><div style={{display:'flex',gap:4}}>
                 <Btn size="sm" onClick={()=>viewO(o.id)}>보기</Btn>
                 <Btn size="sm" onClick={()=>openForm(o.id)}>수정</Btn>
+                <Btn size="sm" variant="primary" onClick={()=>openSend(o)}>발송</Btn>
                 <Btn size="sm" variant="danger" onClick={()=>del(o.id)}>삭제</Btn>
               </div></Td>
             </tr>
@@ -130,7 +154,11 @@ export default function OrderPage({ renderLayout }) {
       <Modal open={modal?.mode==='form'} onClose={()=>setModal(null)} title={modal?.id?'발주서 수정':'발주서 작성'} wide>
         <FormGrid>
           <FormGroup label="발주번호"><Input value={form.id} readOnly mono /></FormGroup>
-          <FormGroup label="거래처"><Select value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} /></FormGroup>
+          <FormGroup label="거래처"><SearchSelect value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} placeholder="거래처명 검색" /></FormGroup>
+          <FormGroup label="연결 견적서">
+            <SearchSelect value={form.quotation_id||''} onChange={onPickQuotation} options={quoteOpts} placeholder="견적번호/거래처 검색" />
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>선택 시 품목명세가 자동으로 채워집니다</div>
+          </FormGroup>
           <FormGroup label="발주일"><Input type="date" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></FormGroup>
           <FormGroup label="납기일"><Input type="date" value={form.deliver} onChange={v=>setForm(f=>({...f,deliver:v}))} /></FormGroup>
           <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={statOpts} /></FormGroup>
@@ -157,7 +185,7 @@ export default function OrderPage({ renderLayout }) {
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20,padding:16,background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}}>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>발주자</div>
-                  {[['상호','Axiosoft (주)'],['발주일',o_view.date],['납기일',o_view.deliver]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:70}}>{k}</span><span>{v}</span></div>)}
+                  {[['상호',user?.company||'-'],['발주일',o_view.date],['납기일',o_view.deliver]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:70}}>{k}</span><span>{v}</span></div>)}
                 </div>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>공급업체</div>
@@ -178,10 +206,29 @@ export default function OrderPage({ renderLayout }) {
             <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20}}>
               <Btn onClick={()=>setModal(null)}>닫기</Btn>
               <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
+              <Btn variant="success" onClick={()=>openSend(o_view)}>메일 발송</Btn>
               <Btn variant="primary" onClick={()=>openForm(o_view.id)}>수정</Btn>
             </div>
           </>
         })()}
+      </Modal>
+
+      {/* 메일 발송 모달 */}
+      <Modal open={modal?.mode==='send'} onClose={()=>setModal(null)} title="발주서 메일 발송">
+        {!user?.smtp_configured && (
+          <div style={{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--warn)'}}>
+            ⚠️ 메일(SMTP) 설정이 안 되어 있습니다. <b>내 정보 → 메일(SMTP) 설정</b>을 먼저 완료하세요.
+          </div>
+        )}
+        <FormGrid cols={1}>
+          <FormGroup label="받는사람 이메일"><Input type="email" value={sendForm.to} onChange={v=>setSendForm(f=>({...f,to:v}))} placeholder="supplier@example.com" /></FormGroup>
+          <FormGroup label="제목"><Input value={sendForm.subject} onChange={v=>setSendForm(f=>({...f,subject:v}))} /></FormGroup>
+          <FormGroup label="메시지 (선택)"><Input value={sendForm.message} onChange={v=>setSendForm(f=>({...f,message:v}))} placeholder="안녕하세요, 발주서를 보내드립니다." /></FormGroup>
+        </FormGrid>
+        <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
+          <Btn onClick={()=>setModal(null)}>취소</Btn>
+          <Btn variant="primary" onClick={sendMail} disabled={sending||!user?.smtp_configured}>{sending?'발송 중...':'메일 발송'}</Btn>
+        </div>
       </Modal>
     </>
   )

@@ -11,6 +11,8 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
     biz_no: user?.biz_no || '',
     quote_format: user?.quote_format || 'Q-{YYYY}-{seq}',
     contract_format: user?.contract_format || 'CT-{YYYY}-{seq}',
+    order_format: user?.order_format || 'PO-{YYYY}-{seq}',
+    tax_format: user?.tax_format || 'TAX-{YYYY}-{seq}',
     smtp_host: user?.smtp_host || '',
     smtp_port: user?.smtp_port || 587,
     smtp_user: user?.smtp_user || '',
@@ -32,7 +34,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
       const res = await api.updateProfile(profile)
       // 새 토큰 + 갱신된 user 정보 저장
       if (res.token) localStorage.setItem('erp_token', res.token)
-      const merged = { ...user, ...res.user, biz_no: profile.biz_no, quote_format: profile.quote_format, contract_format: profile.contract_format }
+      const merged = { ...user, ...res.user, biz_no: profile.biz_no, quote_format: profile.quote_format, contract_format: profile.contract_format, order_format: profile.order_format, tax_format: profile.tax_format }
       localStorage.setItem('erp_user', JSON.stringify(merged))
       onUserUpdate && onUserUpdate(merged)
       toast('내 정보가 변경되었습니다')
@@ -89,6 +91,12 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
           </FormGroup>
           <FormGroup label="계약번호 형식">
             <Input value={profile.contract_format} onChange={v => setProfile(p => ({ ...p, contract_format: v }))} placeholder="CT-{YYYY}-{seq}" mono />
+          </FormGroup>
+          <FormGroup label="발주번호 형식">
+            <Input value={profile.order_format} onChange={v => setProfile(p => ({ ...p, order_format: v }))} placeholder="PO-{YYYY}-{seq}" mono />
+          </FormGroup>
+          <FormGroup label="세금계산서번호 형식">
+            <Input value={profile.tax_format} onChange={v => setProfile(p => ({ ...p, tax_format: v }))} placeholder="TAX-{YYYY}-{seq}" mono />
           </FormGroup>
           <FormGroup label="" full>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>

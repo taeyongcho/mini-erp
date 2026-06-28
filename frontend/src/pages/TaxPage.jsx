@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, SearchSelect, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { TAX_STATUSES } from '../constants/index.js'
-import { generateId, today, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
+import { generateId, formatQuoteNo, today, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 function printDoc() {
   const content = document.getElementById('print-area').innerHTML
@@ -28,20 +28,42 @@ function printDoc() {
   win.document.close()
 }
 
-export default function TaxPage({ renderLayout }) {
+export default function TaxPage({ renderLayout, user }) {
   const { data, refresh, showToast } = useData()
   const { taxes, customers, orders } = data
+  const taxFormat = user?.tax_format || 'TAX-{YYYY}-{seq}'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({})
   const [items, setItems] = useState([])
   const [saving, setSaving] = useState(false)
+  const [sendForm, setSendForm] = useState({ to:'', subject:'', message:'' })
+  const [sending, setSending] = useState(false)
 
   const openForm = () => {
-    setForm({ id:generateId('TAX', taxes), date:today(), customer_id:customers[0]?.id||'', order_id:'', status:'pending', note:'' })
-    setItems([{name:'',qty:1,price:0,unit:'개'}])
+    setForm({ id:formatQuoteNo(taxFormat, taxes), date:today(), customer_id:customers[0]?.id||'', order_id:'', status:'pending', note:'' })
+    setItems([{name:'',qty:'',price:''}])
     setModal({mode:'form'})
+  }
+
+  const onPickOrder = (oid) => {
+    const o = orders.find(x => x.id === oid)
+    setForm(p => ({ ...p, order_id: oid, ...(o ? { customer_id: o.customer_id } : {}) }))
+    if (o && o.items?.length) setItems(o.items.map(it => ({ ...it })))
+  }
+
+  const openSend = (t) => {
+    const c = customers.find(x=>x.id===t.customer_id)||{}
+    setSendForm({ to: c.email||'', subject:`[${user?.company||''}] 세금계산서 ${t.id}`, message:'' })
+    setModal({mode:'send', id:t.id})
+  }
+  const sendMail = async () => {
+    if (!sendForm.to || !sendForm.to.includes('@')) return showToast('받는사람 이메일을 입력하세요','error')
+    setSending(true)
+    try { await api.sendTax(modal.id, sendForm); showToast('메일이 발송되었습니다'); setModal(null) }
+    catch(e){ showToast(e.message,'error') }
+    setSending(false)
   }
 
   const save = async () => {
@@ -119,6 +141,7 @@ export default function TaxPage({ renderLayout }) {
               <Td><div style={{display:'flex',gap:4}}>
                 <Btn size="sm" onClick={()=>viewT(t.id)}>보기</Btn>
                 {t.status==='pending'&&<Btn size="sm" variant="success" onClick={()=>issue(t.id)}>발행처리</Btn>}
+                <Btn size="sm" variant="primary" onClick={()=>openSend(t)}>발송</Btn>
                 <Btn size="sm" variant="danger" onClick={()=>del(t.id)}>삭제</Btn>
               </div></Td>
             </tr>
@@ -131,9 +154,12 @@ export default function TaxPage({ renderLayout }) {
       <Modal open={modal?.mode==='form'} onClose={()=>setModal(null)} title="세금계산서 발행" wide>
         <FormGrid>
           <FormGroup label="계산서번호"><Input value={form.id} readOnly mono /></FormGroup>
-          <FormGroup label="거래처"><Select value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} /></FormGroup>
+          <FormGroup label="거래처"><SearchSelect value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} placeholder="거래처명 검색" /></FormGroup>
           <FormGroup label="발행일"><Input type="date" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></FormGroup>
-          <FormGroup label="연결 발주서"><Select value={form.order_id||''} onChange={v=>setForm(f=>({...f,order_id:v}))} options={orderOpts} /></FormGroup>
+          <FormGroup label="연결 발주서">
+            <SearchSelect value={form.order_id||''} onChange={onPickOrder} options={orderOpts} placeholder="발주번호 검색" />
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>선택 시 품목명세가 자동으로 채워집니다</div>
+          </FormGroup>
           <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={TAX_STATUSES} /></FormGroup>
           <FormGroup label="비고"><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
         </FormGrid>
@@ -157,7 +183,7 @@ export default function TaxPage({ renderLayout }) {
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20,padding:16,background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}}>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>공급자</div>
-                  {[['상호','Axiosoft (주)'],['사업자번호','000-00-00000'],['발행일',t_view.date]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:80}}>{k}</span><span>{v}</span></div>)}
+                  {[['상호',user?.company||'-'],['사업자번호',user?.biz_no||'-'],['발행일',t_view.date]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:80}}>{k}</span><span>{v}</span></div>)}
                 </div>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>공급받는자</div>
@@ -178,10 +204,29 @@ export default function TaxPage({ renderLayout }) {
             <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20}}>
               <Btn onClick={()=>setModal(null)}>닫기</Btn>
               <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
+              <Btn variant="success" onClick={()=>openSend(t_view)}>메일 발송</Btn>
               {t_view.status==='pending'&&<Btn variant="success" onClick={()=>{setModal(null);issue(t_view.id)}}>발행완료 처리</Btn>}
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 메일 발송 모달 */}
+      <Modal open={modal?.mode==='send'} onClose={()=>setModal(null)} title="세금계산서 메일 발송">
+        {!user?.smtp_configured && (
+          <div style={{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--warn)'}}>
+            ⚠️ 메일(SMTP) 설정이 안 되어 있습니다. <b>내 정보 → 메일(SMTP) 설정</b>을 먼저 완료하세요.
+          </div>
+        )}
+        <FormGrid cols={1}>
+          <FormGroup label="받는사람 이메일"><Input type="email" value={sendForm.to} onChange={v=>setSendForm(f=>({...f,to:v}))} placeholder="customer@example.com" /></FormGroup>
+          <FormGroup label="제목"><Input value={sendForm.subject} onChange={v=>setSendForm(f=>({...f,subject:v}))} /></FormGroup>
+          <FormGroup label="메시지 (선택)"><Input value={sendForm.message} onChange={v=>setSendForm(f=>({...f,message:v}))} placeholder="안녕하세요, 세금계산서를 보내드립니다." /></FormGroup>
+        </FormGrid>
+        <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
+          <Btn onClick={()=>setModal(null)}>취소</Btn>
+          <Btn variant="primary" onClick={sendMail} disabled={sending||!user?.smtp_configured}>{sending?'발송 중...':'메일 발송'}</Btn>
+        </div>
       </Modal>
     </>
   )

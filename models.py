@@ -40,6 +40,8 @@ class Company(Base):
     active = Column(Boolean, default=True)         # 정지 여부
     quote_format = Column(String, default="Q-{YYYY}-{seq}")  # 견적번호 포맷 템플릿
     contract_format = Column(String, default="CT-{YYYY}-{seq}")  # 계약번호 포맷 템플릿
+    order_format = Column(String, default="PO-{YYYY}-{seq}")      # 발주번호 포맷 템플릿
+    tax_format = Column(String, default="TAX-{YYYY}-{seq}")       # 세금계산서번호 포맷 템플릿
     smtp_host = Column(String, default="")
     smtp_port = Column(Integer, default=587)
     smtp_user = Column(String, default="")
