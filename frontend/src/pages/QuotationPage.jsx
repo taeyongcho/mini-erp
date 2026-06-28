@@ -42,6 +42,8 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
   const [form, setForm] = useState({})
   const [items, setItems] = useState([{name:'',qty:'',price:''}])
   const [saving, setSaving] = useState(false)
+  const [sendForm, setSendForm] = useState({ to:'', subject:'', message:'' })
+  const [sending, setSending] = useState(false)
 
   // id가 있으면 수정, asCopy면 발송완료 건을 새 번호로 복제
   const openForm = (id, asCopy=false) => {
@@ -73,14 +75,31 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
     setSaving(false)
   }
 
-  // 발송: 상태를 발송완료로 잠그고 PDF 출력창 안내
-  const send = async (q) => {
-    if (!confirm(`${q.id} 견적서를 발송완료 처리할까요?\n발송 후에는 수정 시 새 번호로 복제 저장됩니다.`)) return
+  // 발송 모달 열기 (받는사람 기본값 = 거래처 이메일)
+  const openSend = (q) => {
+    const c = customers.find(x=>x.id===q.customer_id)||{}
+    setSendForm({ to: c.email||'', subject:`[${user?.company||''}] 견적서 ${q.id}`, message:'' })
+    setModal({mode:'send', id:q.id})
+  }
+
+  // 메일 발송 (백엔드가 발송 성공 시 상태를 발송완료로 전환)
+  const sendMail = async () => {
+    if (!sendForm.to || !sendForm.to.includes('@')) return showToast('받는사람 이메일을 입력하세요','error')
+    setSending(true)
     try {
-      await api.updateQuotation(q.id, {...q, status:'sent', customer_id:+q.customer_id})
-      showToast('발송완료 처리되었습니다')
-      await refresh()
-      setModal({mode:'view', id:q.id})
+      await api.sendQuotation(modal.id, sendForm)
+      showToast('메일이 발송되었습니다')
+      await refresh(); setModal(null)
+    } catch(e){ showToast(e.message,'error') }
+    setSending(false)
+  }
+
+  // 메일 없이 발송완료 처리 (SMTP 미설정 시 대체)
+  const markSent = async (id) => {
+    const q = quotations.find(x=>x.id===id)
+    try {
+      await api.updateQuotation(id, {...q, status:'sent', customer_id:+q.customer_id})
+      showToast('발송완료 처리되었습니다'); await refresh(); setModal(null)
     } catch(e){ showToast(e.message,'error') }
   }
 
@@ -171,7 +190,7 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
               <Td><div style={{display:'flex',gap:4}}>
                 {!isSent && <>
                   <Btn size="sm" onClick={()=>openForm(q.id)}>수정</Btn>
-                  <Btn size="sm" variant="primary" onClick={()=>send(q)}>발송</Btn>
+                  <Btn size="sm" variant="primary" onClick={()=>openSend(q)}>발송</Btn>
                   <Btn size="sm" variant="danger" onClick={()=>del(q.id)}>삭제</Btn>
                 </>}
                 {isSent && <>
@@ -247,13 +266,33 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
               <Btn onClick={()=>setModal(null)}>닫기</Btn>
               <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
               {!isSent && <Btn variant="primary" onClick={()=>openForm(q_view.id)}>수정</Btn>}
-              {!isSent && <Btn variant="success" onClick={()=>send(q_view)}>발송</Btn>}
+              {!isSent && <Btn variant="success" onClick={()=>openSend(q_view)}>발송</Btn>}
               {isSent && <Btn onClick={()=>openForm(q_view.id, true)}>수정(복제)</Btn>}
               {isSent && <Btn variant="success" onClick={()=>convertToContract(q_view)}>계약서 전환</Btn>}
               {isSent && <Btn variant="warn" onClick={()=>{setModal(null);convertToOrder(q_view)}}>발주서 전환</Btn>}
             </div>
           </>
         })()}
+      </Modal>
+
+      {/* Send Modal */}
+      <Modal open={modal?.mode==='send'} onClose={()=>setModal(null)} title="견적서 메일 발송">
+        {!user?.smtp_configured && (
+          <div style={{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--warn)'}}>
+            ⚠️ 메일(SMTP) 설정이 안 되어 있습니다. <b>내 정보 → 메일(SMTP) 설정</b>을 먼저 완료하면 실제 메일이 발송됩니다.<br/>
+            지금은 메일 없이 '발송완료'로 상태만 변경할 수 있습니다.
+          </div>
+        )}
+        <FormGrid cols={1}>
+          <FormGroup label="받는사람 이메일"><Input type="email" value={sendForm.to} onChange={v=>setSendForm(f=>({...f,to:v}))} placeholder="customer@example.com" /></FormGroup>
+          <FormGroup label="제목"><Input value={sendForm.subject} onChange={v=>setSendForm(f=>({...f,subject:v}))} /></FormGroup>
+          <FormGroup label="메시지 (선택)"><Input value={sendForm.message} onChange={v=>setSendForm(f=>({...f,message:v}))} placeholder="안녕하세요, 견적서를 보내드립니다." /></FormGroup>
+        </FormGrid>
+        <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
+          <Btn onClick={()=>setModal(null)}>취소</Btn>
+          <Btn onClick={()=>markSent(modal.id)}>메일 없이 발송완료</Btn>
+          <Btn variant="primary" onClick={sendMail} disabled={sending||!user?.smtp_configured}>{sending?'발송 중...':'메일 발송'}</Btn>
+        </div>
       </Modal>
     </>
   )

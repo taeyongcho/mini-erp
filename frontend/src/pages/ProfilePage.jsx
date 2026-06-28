@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
-import { FormGrid, FormGroup, Input, Btn, toast } from '../components/UI.jsx'
+import { FormGrid, FormGroup, Input, Select, Btn, toast } from '../components/UI.jsx'
 import { isBizNo } from '../utils/index.js'
 
 export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
@@ -10,7 +10,14 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
     company_name: user?.company || '',
     biz_no: user?.biz_no || '',
     quote_format: user?.quote_format || 'Q-{YYYY}-{seq}',
+    smtp_host: user?.smtp_host || '',
+    smtp_port: user?.smtp_port || 587,
+    smtp_user: user?.smtp_user || '',
+    smtp_from: user?.smtp_from || '',
+    smtp_tls: user?.smtp_tls ?? true,
+    smtp_pass: '',
   })
+  const smtpConfigured = !!user?.smtp_configured
   const [pw, setPw] = useState({ current_password: '', new_password: '', confirm: '' })
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPw, setSavingPw] = useState(false)
@@ -86,6 +93,37 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
         <div style={{ marginTop: 20 }}>
           <Btn variant="primary" onClick={saveProfile} disabled={savingProfile}>
             {savingProfile ? '저장 중...' : '정보 저장'}
+          </Btn>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={cardTitle}>메일(SMTP) 설정 {smtpConfigured && <span style={{fontSize:11,color:'var(--success)'}}>● 설정됨</span>}</div>
+        <div style={cardDesc}>견적서 "발송" 시 이 계정으로 고객에게 메일이 전송됩니다. Gmail/네이버는 <b>앱 비밀번호</b>를 발급받아 입력하세요.</div>
+        <FormGrid>
+          <FormGroup label="SMTP 서버">
+            <Input value={profile.smtp_host} onChange={v => setProfile(p => ({ ...p, smtp_host: v }))} placeholder="smtp.gmail.com" />
+          </FormGroup>
+          <FormGroup label="포트 / 보안">
+            <div style={{ display:'flex', gap:8 }}>
+              <Input value={profile.smtp_port} onChange={v => setProfile(p => ({ ...p, smtp_port: +v || 587 }))} placeholder="587" style={{ width:90 }} />
+              <Select value={profile.smtp_tls ? 'tls' : 'ssl'} onChange={v => setProfile(p => ({ ...p, smtp_tls: v === 'tls', smtp_port: v === 'tls' ? 587 : 465 }))}
+                options={[{ value:'tls', label:'STARTTLS (587)' }, { value:'ssl', label:'SSL (465)' }]} />
+            </div>
+          </FormGroup>
+          <FormGroup label="아이디 (메일주소)">
+            <Input type="email" value={profile.smtp_user} onChange={v => setProfile(p => ({ ...p, smtp_user: v }))} placeholder="me@gmail.com" />
+          </FormGroup>
+          <FormGroup label="앱 비밀번호">
+            <Input type="password" value={profile.smtp_pass} onChange={v => setProfile(p => ({ ...p, smtp_pass: v }))} placeholder={smtpConfigured ? '변경 시에만 입력' : '앱 비밀번호'} />
+          </FormGroup>
+          <FormGroup label="보내는사람 표시 (선택)" full>
+            <Input value={profile.smtp_from} onChange={v => setProfile(p => ({ ...p, smtp_from: v }))} placeholder="비우면 아이디로 발송됩니다" />
+          </FormGroup>
+        </FormGrid>
+        <div style={{ marginTop: 20 }}>
+          <Btn variant="primary" onClick={saveProfile} disabled={savingProfile}>
+            {savingProfile ? '저장 중...' : '설정 저장'}
           </Btn>
         </div>
       </div>

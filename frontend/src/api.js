@@ -44,6 +44,7 @@ export const api = {
   updateProduct: (id, d) => req('PUT', `/products/${id}`, d),
   deleteProduct: (id) => req('DELETE', `/products/${id}`),
 
+  sendQuotation: (id, d) => req('POST', `/quotations/${id}/send`, d),
   getQuotations: () => req('GET', '/quotations'),
   createQuotation: (d) => req('POST', '/quotations', d),
   updateQuotation: (id, d) => req('PUT', `/quotations/${id}`, d),

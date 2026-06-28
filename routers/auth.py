@@ -135,7 +135,13 @@ def me(payload: dict = Depends(get_current), db: Session = Depends(get_db)):
     return {"email": user.email, "name": user.name, "role": user.role,
             "company": company.name if company else "", "plan": company.plan if company else "free",
             "biz_no": company.biz_no if company else "",
-            "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}"}
+            "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}",
+            "smtp_host": company.smtp_host if company else "",
+            "smtp_port": company.smtp_port if company else 587,
+            "smtp_user": company.smtp_user if company else "",
+            "smtp_from": company.smtp_from if company else "",
+            "smtp_tls": company.smtp_tls if company else True,
+            "smtp_configured": bool(company and company.smtp_host and company.smtp_pass)}
 
 
 class ProfileIn(BaseModel):
@@ -144,6 +150,12 @@ class ProfileIn(BaseModel):
     company_name: str = ""
     biz_no: str = ""
     quote_format: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""   # 빈값이면 기존 비밀번호 유지
+    smtp_from: str = ""
+    smtp_tls: bool = True
 
     @field_validator("email")
     @classmethod
@@ -185,6 +197,13 @@ def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Se
         company.biz_no = body.biz_no
         if body.quote_format:
             company.quote_format = body.quote_format
+        company.smtp_host = body.smtp_host
+        company.smtp_port = body.smtp_port or 587
+        company.smtp_user = body.smtp_user
+        company.smtp_from = body.smtp_from
+        company.smtp_tls = body.smtp_tls
+        if body.smtp_pass:  # 빈값이면 기존 비밀번호 유지
+            company.smtp_pass = body.smtp_pass
     db.commit(); db.refresh(user)
     # 이메일/이름이 바뀌면 토큰의 표시정보가 바뀌므로 새 토큰 재발급
     return {"token": make_token(user),
@@ -192,7 +211,13 @@ def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Se
                      "company": company.name if company else "",
                      "plan": company.plan if company else "free",
                      "biz_no": company.biz_no if company else "",
-                     "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}"}}
+                     "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}",
+                     "smtp_host": company.smtp_host if company else "",
+                     "smtp_port": company.smtp_port if company else 587,
+                     "smtp_user": company.smtp_user if company else "",
+                     "smtp_from": company.smtp_from if company else "",
+                     "smtp_tls": company.smtp_tls if company else True,
+                     "smtp_configured": bool(company and company.smtp_host and company.smtp_pass)}}
 
 
 @router.put("/password")

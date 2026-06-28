@@ -39,6 +39,12 @@ class Company(Base):
     plan = Column(String, default="free")          # free / pro
     active = Column(Boolean, default=True)         # 정지 여부
     quote_format = Column(String, default="Q-{YYYY}-{seq}")  # 견적번호 포맷 템플릿
+    smtp_host = Column(String, default="")
+    smtp_port = Column(Integer, default=587)
+    smtp_user = Column(String, default="")
+    smtp_pass = Column(String, default="")   # 앱 비밀번호 (쓰기 전용)
+    smtp_from = Column(String, default="")   # 보내는사람 표시 (없으면 smtp_user)
+    smtp_tls = Column(Boolean, default=True) # True=STARTTLS(587), False=SSL(465)
     created_at = Column(String, default="")
 
 
