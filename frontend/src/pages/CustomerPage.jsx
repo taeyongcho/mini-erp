@@ -14,7 +14,7 @@ export default function CustomerPage({ renderLayout }) {
   const [saving, setSaving] = useState(false)
 
   const openForm = (c) => {
-    setForm(c ? {...c} : {name:'',ceo:'',biz_no:'',addr:'',phone:'',email:'',type:'법인'})
+    setForm(c ? {...c} : {name:'',ceo:'',biz_no:'',addr:'',phone:'',email:'',type:'법인',biz_type:'',biz_item:'',tax_manager:'',tax_phone:'',tax_email:''})
     setEditId(c?.id||null); setModal(true)
   }
   const f = (k) => v => setForm(p=>({...p,[k]:v}))
@@ -24,6 +24,7 @@ export default function CustomerPage({ renderLayout }) {
     if (!isBizNo(form.biz_no)) return showToast('사업자번호 형식이 올바르지 않습니다 (000-00-00000)','error')
     if (!isPhone(form.phone)) return showToast('전화번호는 숫자와 하이픈만 입력하세요','error')
     if (!isEmail(form.email)) return showToast('이메일 형식이 올바르지 않습니다','error')
+    if (!isEmail(form.tax_email)) return showToast('계산서 수신 메일 형식이 올바르지 않습니다','error')
     setSaving(true)
     try {
       if (editId) await api.updateCustomer(editId, form)
@@ -48,6 +49,11 @@ export default function CustomerPage({ renderLayout }) {
       {key:'phone', label:'전화'},
       {key:'email', label:'이메일'},
       {key:'type', label:'구분'},
+      {key:'biz_type', label:'업태'},
+      {key:'biz_item', label:'종목'},
+      {key:'tax_manager', label:'계산서담당자'},
+      {key:'tax_phone', label:'계산서담당연락처'},
+      {key:'tax_email', label:'계산서수신메일'},
     ], customers)
   }
 
@@ -90,6 +96,12 @@ export default function CustomerPage({ renderLayout }) {
               {CUSTOMER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
           </FormGroup>
+          <FormGroup label="업태"><Input value={form.biz_type} onChange={f('biz_type')} placeholder="예: 도소매" /></FormGroup>
+          <FormGroup label="종목"><Input value={form.biz_item} onChange={f('biz_item')} placeholder="예: 소프트웨어" /></FormGroup>
+
+          <FormGroup label="계산서 수신 담당자" full><Input value={form.tax_manager} onChange={f('tax_manager')} placeholder="담당자명" /></FormGroup>
+          <FormGroup label="계산서 담당 연락처"><Input value={form.tax_phone} onChange={f('tax_phone')} placeholder="010-0000-0000" /></FormGroup>
+          <FormGroup label="계산서 수신 메일"><Input value={form.tax_email} onChange={f('tax_email')} placeholder="tax@company.com" /></FormGroup>
         </FormGrid>
         <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
           <Btn onClick={()=>setModal(false)}>취소</Btn>

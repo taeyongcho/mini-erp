@@ -74,6 +74,11 @@ class Customer(Base):
     phone = Column(String, default="")
     email = Column(String, default="")
     type = Column(String, default="법인")
+    biz_type = Column(String, default="")     # 업태
+    biz_item = Column(String, default="")     # 종목
+    tax_manager = Column(String, default="")  # 계산서 수신 담당자
+    tax_phone = Column(String, default="")    # 계산서 담당자 연락처
+    tax_email = Column(String, default="")    # 계산서 수신 메일
 
 
 class Product(Base):

@@ -19,6 +19,11 @@ class CustomerIn(BaseModel):
     phone: str = ""
     email: str = ""
     type: str = "법인"
+    biz_type: str = ""
+    biz_item: str = ""
+    tax_manager: str = ""
+    tax_phone: str = ""
+    tax_email: str = ""
 
     @field_validator("name")
     @classmethod
