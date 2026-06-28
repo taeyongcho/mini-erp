@@ -44,9 +44,47 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
   const [saving, setSaving] = useState(false)
   const [sendForm, setSendForm] = useState({ to:'', subject:'', message:'' })
   const [sending, setSending] = useState(false)
+  // 매입견적서 불러오기
+  const [purchaseItems, setPurchaseItems] = useState([])  // 원본 매입 품목 (참고용)
+  const [margin, setMargin] = useState(20)
+  const [marginMethod, setMarginMethod] = useState('markup')  // markup | margin
+  const [importing, setImporting] = useState(false)
+
+  // 매입가 → 판매가 계산
+  const salePrice = (cost, m=margin, method=marginMethod) => {
+    const c = Number(cost) || 0
+    if (method === 'margin') return m < 100 ? Math.round(c / (1 - m/100)) : c
+    return Math.round(c * (1 + m/100))
+  }
+
+  // 현재 매입품목 + 마진으로 매출품목 재계산
+  const recompute = (m, method) => {
+    if (!purchaseItems.length) return
+    setItems(purchaseItems.map(p => ({ name: p.name, qty: p.qty || 1, price: salePrice(p.price, m, method) })))
+  }
+
+  const uploadPurchase = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const token = localStorage.getItem('erp_token')
+      const fd = new FormData(); fd.append('file', file)
+      const r = await fetch('/api/convert/pdf-to-items', { method:'POST', headers: token?{Authorization:'Bearer '+token}:{}, body: fd })
+      if (!r.ok) throw new Error('PDF 변환 실패')
+      const d = await r.json()
+      const pItems = (d.items||[]).map(it => ({ name: it.name, qty: it.qty||1, price: it.price||0 }))
+      if (!pItems.length) { showToast('품목을 추출하지 못했습니다. 직접 입력하세요','error'); return }
+      setPurchaseItems(pItems)
+      setItems(pItems.map(p => ({ name:p.name, qty:p.qty||1, price: salePrice(p.price) })))
+      showToast(`매입견적서에서 ${pItems.length}개 품목을 불러왔습니다`)
+    } catch(err){ showToast(err.message,'error') }
+    finally { setImporting(false); e.target.value='' }
+  }
 
   // id가 있으면 수정, asCopy면 발송완료 건을 새 번호로 복제
   const openForm = (id, asCopy=false) => {
+    setPurchaseItems([])
     const q = id ? quotations.find(x=>x.id===id) : null
     if (q && asCopy) {
       setForm({ ...q, id: formatQuoteNo(quoteFormat, quotations), date: today(), status:'draft' })
@@ -222,6 +260,39 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
           </FormGroup>
           <FormGroup label="비고" full><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
         </FormGrid>
+        {/* 매입견적서 불러오기 */}
+        <div style={{marginTop:20,padding:16,background:'var(--surface2)',border:'1px dashed var(--border)',borderRadius:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+            <span style={{fontSize:12,fontWeight:600,color:'var(--label)'}}>📥 매입견적서 불러오기</span>
+            <label style={{cursor:'pointer'}}>
+              <span style={{display:'inline-block',padding:'6px 12px',background:'var(--accent)',color:'#fff',borderRadius:6,fontSize:12}}>{importing?'변환 중...':'PDF 업로드'}</span>
+              <input type="file" accept=".pdf" onChange={uploadPurchase} disabled={importing} style={{display:'none'}} />
+            </label>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span style={{fontSize:12,color:'var(--muted)'}}>마진율</span>
+              <input type="number" value={margin} onChange={e=>{const m=+e.target.value||0; setMargin(m); recompute(m, marginMethod)}}
+                style={{width:60,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 8px',color:'var(--text)',fontFamily:'var(--mono)',fontSize:12,textAlign:'right',outline:'none'}} />
+              <span style={{fontSize:12,color:'var(--muted)'}}>%</span>
+            </div>
+            <div style={{display:'flex',gap:4,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,padding:3}}>
+              {[['markup','마크업'],['margin','마진율']].map(([v,l])=>(
+                <button key={v} onClick={()=>{setMarginMethod(v); recompute(margin, v)}}
+                  style={{padding:'4px 10px',borderRadius:4,border:'none',cursor:'pointer',fontSize:11,fontWeight:600,
+                    background: marginMethod===v?'var(--accent)':'transparent', color: marginMethod===v?'#fff':'var(--label)'}}>{l}</button>
+              ))}
+            </div>
+          </div>
+          {purchaseItems.length>0 && (
+            <div style={{marginTop:12}}>
+              <div style={{fontSize:11,color:'var(--muted)',marginBottom:6}}>원본 매입가 (참고) — {marginMethod==='markup'?'판매가=매입가×(1+마진율)':'판매가=매입가÷(1−마진율)'}</div>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                <thead><tr>{['품목명','매입가','→ 판매가'].map((h,i)=><th key={i} style={{padding:'4px 8px',textAlign:i?'right':'left',color:'var(--muted)',borderBottom:'1px solid var(--border)'}}>{h}</th>)}</tr></thead>
+                <tbody>{purchaseItems.map((p,i)=><tr key={i}><td style={{padding:'4px 8px'}}>{p.name}</td><td style={{padding:'4px 8px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--muted)'}}>{fmt(p.price)}</td><td style={{padding:'4px 8px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--accent2)'}}>{fmt(salePrice(p.price))}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         <LineEditor items={items} onChange={setItems} />
         <Summary items={items} />
         <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
