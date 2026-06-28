@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { StatCard, Badge, fmtW } from '../components/UI.jsx'
 import { useData } from '../context/DataContext.jsx'
 import { calcItems } from '../utils/index.js'
@@ -7,6 +8,41 @@ const CONTRACT_COLOR = { reviewing:'var(--muted)', waiting_sign:'var(--accent)',
 
 function monthKey(dateStr) {
   return dateStr ? dateStr.slice(0, 7) : ''
+}
+
+const PERIODS = [
+  { key: 'day', label: '일일현황' },
+  { key: 'week', label: '주간현황' },
+  { key: 'month', label: '월별현황' },
+  { key: 'all', label: '전체' },
+]
+
+// 선택한 기간의 [시작일, 종료일] 범위(YYYY-MM-DD)를 구한다. all이면 null.
+function periodRange(period) {
+  const now = new Date()
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  if (period === 'day') {
+    const s = ymd(now)
+    return { start: s, end: s, label: `${s}` }
+  }
+  if (period === 'week') {
+    const dow = (now.getDay() + 6) % 7 // 월요일=0
+    const mon = new Date(now); mon.setDate(now.getDate() - dow)
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+    return { start: ymd(mon), end: ymd(sun), label: `${ymd(mon)} ~ ${ymd(sun)}` }
+  }
+  if (period === 'month') {
+    const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return { start: m + '-01', end: m + '-31', label: `${m}` }
+  }
+  return { start: null, end: null, label: '전체 기간' }
+}
+
+function inRange(dateStr, range) {
+  if (!range.start) return true
+  if (!dateStr) return false
+  const d = dateStr.slice(0, 10)
+  return d >= range.start && d <= range.end
 }
 
 function last6Months() {
@@ -21,13 +57,22 @@ function last6Months() {
 
 export default function Dashboard({ onNav, renderLayout }) {
   const { data } = useData()
+  const [period, setPeriod] = useState('month')
   const { quotations, contracts, orders, taxes, customers, receivables = [], payables = [], accounts = [] } = data
-  const totalQ = quotations.reduce((s,q)=>s+calcItems(q.items||[]).total,0)
-  const totalC = contracts.reduce((s,c)=>s+(c.amount||0),0)
-  const totalO = orders.reduce((s,o)=>s+calcItems(o.items||[]).total,0)
-  const totalT = taxes.reduce((s,t)=>s+(t.supply||0)+(t.vat||0),0)
-  const pendingTax = taxes.filter(t=>t.status==='pending').length
-  const waitingSign = contracts.filter(c=>c.status==='waiting_sign').length
+
+  // 선택 기간으로 필터링한 문서들
+  const range = periodRange(period)
+  const fQuotations = quotations.filter(q => inRange(q.date, range))
+  const fContracts = contracts.filter(c => inRange(c.date, range))
+  const fOrders = orders.filter(o => inRange(o.date, range))
+  const fTaxes = taxes.filter(t => inRange(t.date, range))
+
+  const totalQ = fQuotations.reduce((s,q)=>s+calcItems(q.items||[]).total,0)
+  const totalC = fContracts.reduce((s,c)=>s+(c.amount||0),0)
+  const totalO = fOrders.reduce((s,o)=>s+calcItems(o.items||[]).total,0)
+  const totalT = fTaxes.reduce((s,t)=>s+(t.supply||0)+(t.vat||0),0)
+  const pendingTax = fTaxes.filter(t=>t.status==='pending').length
+  const waitingSign = fContracts.filter(c=>c.status==='waiting_sign').length
   const expiringSoon = contracts.filter(c=>c.status==='active'&&c.days_left!==null&&c.days_left>=0&&c.days_left<=30).length
 
   // 자금현황
@@ -70,13 +115,27 @@ export default function Dashboard({ onNav, renderLayout }) {
 
   return renderLayout(null, (
     <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+        <div style={{ display:'flex', gap:4, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:4 }}>
+          {PERIODS.map(p => (
+            <button key={p.key} onClick={() => setPeriod(p.key)}
+              style={{ padding:'6px 14px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:'var(--sans)', fontSize:12, fontWeight:600,
+                background: period===p.key ? 'var(--accent)' : 'transparent', color: period===p.key ? '#fff' : 'var(--label)' }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <span style={{ fontSize:12, color:'var(--muted)', fontFamily:'var(--mono)' }}>📅 {range.label}</span>
+      </div>
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:16 }}>
-        <StatCard label="견적 총액" value={fmtW(totalQ)} sub={`${quotations.length}건`} color="var(--accent)" />
+        <StatCard label="견적 총액" value={fmtW(totalQ)} sub={`${fQuotations.length}건`} color="var(--accent)" />
         <StatCard label="계약 총액" value={fmtW(totalC)} sub={`서명대기 ${waitingSign}건`} color="var(--accent2)" />
-        <StatCard label="발주 총액" value={fmtW(totalO)} sub={`${orders.length}건`} color="var(--warn)" />
+        <StatCard label="발주 총액" value={fmtW(totalO)} sub={`${fOrders.length}건`} color="var(--warn)" />
         <StatCard label="세금계산서" value={fmtW(totalT)} sub={`미발행 ${pendingTax}건`} color="var(--success)" />
       </div>
 
+      <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.8px', margin:'4px 2px 10px' }}>자금현황 (현재 시점)</div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:16 }}>
         <StatCard label="받을돈" value={fmtW(totalReceivable)} sub="미수 잔액" color="var(--warn)" />
         <StatCard label="줄돈" value={fmtW(totalPayable)} sub="미지급 잔액" color="var(--danger)" />
