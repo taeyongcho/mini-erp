@@ -92,4 +92,4 @@ if __name__ == "__main__":
     if getattr(sys, 'frozen', False):
         t = threading.Thread(target=open_browser, daemon=True)
         t.start()
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
