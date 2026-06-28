@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from './api'
-import { Layout, ToastContainer, Btn, PlanBadge } from './components/UI.jsx'
+import { Layout, ToastContainer, Btn, PlanBadge, ThemeToggle, getTheme, applyTheme } from './components/UI.jsx'
 import { DataProvider, useData } from './context/DataContext.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import QuotationPage from './pages/QuotationPage.jsx'
@@ -73,6 +73,7 @@ function AppInner({ user, onLogout, onUserUpdate }) {
           문서 {docCount}/{FREE_DOC_LIMIT}
         </span>
       )}
+      <ThemeToggle />
       <Btn variant="secondary" size="sm" onClick={onLogout}>로그아웃</Btn>
     </div>
   )
@@ -82,8 +83,8 @@ function AppInner({ user, onLogout, onUserUpdate }) {
       onNav={setPage}
       user={user}
       onUserUpdate={onUserUpdate}
-      renderLayout={(actions, children) => (
-        <Layout page={page} onNav={setPage} topbarActions={<>{actions}{userActions}</>} badges={badges}>
+      renderLayout={(actions, children, titleNode) => (
+        <Layout page={page} onNav={setPage} title={titleNode} topbarActions={<>{actions}{userActions}</>} badges={badges}>
           {children}
         </Layout>
       )}
@@ -106,6 +107,9 @@ function loadUser() {
 
 export default function App() {
   const [user, setUser] = useState(loadUser)
+
+  // 저장된 테마 적용 (최초 1회)
+  useEffect(() => { applyTheme(getTheme()) }, [])
 
   // 로그인 객체에는 plan이 없으므로(로그인 응답엔 미포함) me()로 최신 plan 동기화
   useEffect(() => {

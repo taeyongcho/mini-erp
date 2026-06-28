@@ -15,7 +15,25 @@ const s = {
   content: { flex:1, overflowY:'auto', padding:24 },
 }
 
-export function Layout({ page, onNav, topbarActions, children, badges }) {
+export function getTheme() {
+  return localStorage.getItem('erp_theme') || 'dark'
+}
+export function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('erp_theme', theme)
+}
+export function ThemeToggle() {
+  const [theme, setTheme] = useState(getTheme())
+  const toggle = () => { const t = theme === 'dark' ? 'light' : 'dark'; applyTheme(t); setTheme(t) }
+  return (
+    <button onClick={toggle} title={theme === 'dark' ? '라이트 모드로' : '다크 모드로'}
+      style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, padding:'5px 10px', cursor:'pointer', fontSize:14, color:'var(--text)' }}>
+      {theme === 'dark' ? '☀️' : '🌙'}
+    </button>
+  )
+}
+
+export function Layout({ page, onNav, topbarActions, children, badges, title }) {
   const nav = (id, icon, label) => (
     <div style={s.navItem(page===id)} onClick={() => onNav(id)}
       onMouseEnter={e => { if(page!==id) { e.currentTarget.style.background='var(--surface2)'; e.currentTarget.style.color='var(--text)' }}}
@@ -50,7 +68,7 @@ export function Layout({ page, onNav, topbarActions, children, badges }) {
       </nav>
       <div style={s.main}>
         <div style={s.topbar}>
-          <div style={s.topbarTitle}>{titles[page]||''}</div>
+          <div style={s.topbarTitle}>{title || titles[page] || ''}</div>
           <div style={s.topbarActions}>{topbarActions}</div>
         </div>
         <div style={s.content}>{children}</div>
