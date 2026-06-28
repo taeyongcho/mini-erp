@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import List, Optional, Any
 from database import get_db
 import models
 from models import ContractStatus
 from routers.auth import get_company_id, check_doc_limit
+from routers.validators import check_date, valid_date, check_items_amounts
 
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
 
@@ -19,7 +20,7 @@ class ContractIn(BaseModel):
     quotation_id: Optional[str] = None
     status: ContractStatus = ContractStatus.reviewing
     title: str
-    amount: float = 0
+    amount: float = Field(default=0, ge=0)
     payment_terms: str = ""
     delivery_terms: str = ""
     warranty: str = ""
@@ -33,6 +34,32 @@ class ContractIn(BaseModel):
         if not v or not v.strip():
             raise ValueError("계약명은 필수입니다")
         return v.strip()
+
+    @field_validator("date")
+    @classmethod
+    def date_valid(cls, v: str) -> str:
+        return check_date(v, "계약일")
+
+    @field_validator("start_date")
+    @classmethod
+    def start_valid(cls, v: str) -> str:
+        return check_date(v, "시작일")
+
+    @field_validator("end_date")
+    @classmethod
+    def end_valid(cls, v: str) -> str:
+        return check_date(v, "종료일")
+
+    @field_validator("items")
+    @classmethod
+    def items_valid(cls, v: list) -> list:
+        return check_items_amounts(v)
+
+    @model_validator(mode="after")
+    def end_after_start(self):
+        if valid_date(self.start_date) and valid_date(self.end_date) and self.end_date < self.start_date:
+            raise ValueError("계약 종료일은 시작일 이후여야 합니다")
+        return self
 
 
 def serialize(c):

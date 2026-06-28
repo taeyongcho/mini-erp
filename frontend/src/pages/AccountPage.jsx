@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useData } from '../context/DataContext.jsx'
 import { api } from '../api.js'
 import { StatCard, Btn, Modal, FormGrid, FormGroup, Input, TableWrap, Th, Td, fmtW } from '../components/UI.jsx'
+import { isPhone } from '../utils/index.js'
 
 export default function AccountPage({ renderLayout }) {
   const { data, refresh, showToast } = useData()
@@ -26,6 +27,9 @@ export default function AccountPage({ renderLayout }) {
   }
 
   async function handleSave() {
+    if (!form.bank_name) return showToast('은행명을 입력하세요', 'error')
+    if (Number(form.balance) < 0) return showToast('잔액은 0 이상이어야 합니다', 'error')
+    if (!isPhone(form.account_no)) return showToast('계좌번호는 숫자와 하이픈만 입력하세요', 'error')
     try {
       const payload = { ...form, balance: Number(form.balance) }
       if (editing) {

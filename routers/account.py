@@ -1,11 +1,12 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional
 from database import get_db
 import models
 from routers.auth import get_company_id
+from routers.validators import check_account_no
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -13,8 +14,20 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 class AccountIn(BaseModel):
     bank_name: str
     account_no: str = ""
-    balance: float = 0
+    balance: float = Field(default=0, ge=0)
     note: str = ""
+
+    @field_validator("bank_name")
+    @classmethod
+    def bank_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("은행명은 필수입니다")
+        return v.strip()
+
+    @field_validator("account_no")
+    @classmethod
+    def account_no_format(cls, v: str) -> str:
+        return check_account_no(v)
 
 
 @router.get("")

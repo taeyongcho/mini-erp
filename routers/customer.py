@@ -6,6 +6,7 @@ from typing import Optional
 from database import get_db
 import models
 from routers.auth import get_company_id
+from routers.validators import check_biz_no, check_phone, check_email
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
@@ -25,6 +26,21 @@ class CustomerIn(BaseModel):
         if not v or not v.strip():
             raise ValueError("거래처명은 필수입니다")
         return v.strip()
+
+    @field_validator("biz_no")
+    @classmethod
+    def biz_no_format(cls, v: str) -> str:
+        return check_biz_no(v)
+
+    @field_validator("phone")
+    @classmethod
+    def phone_format(cls, v: str) -> str:
+        return check_phone(v)
+
+    @field_validator("email")
+    @classmethod
+    def email_format(cls, v: str) -> str:
+        return check_email(v)
 
 
 @router.get("")

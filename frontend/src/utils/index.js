@@ -36,6 +36,11 @@ export function calcItems(items = []) {
   return { supply, vat, total: supply + vat }
 }
 
+// 입력 검증
+export const isBizNo = v => !v || /^\d{3}-\d{2}-\d{5}$/.test(v)
+export const isPhone = v => !v || /^[0-9-]+$/.test(v)
+export const isEmail = v => !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)
+
 // CSV 내보내기
 export function exportCSV(filename, headers, rows) {
   // headers: [{key, label}]

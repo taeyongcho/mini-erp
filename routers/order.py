@@ -7,6 +7,7 @@ from database import get_db
 import models
 from models import OrderStatus
 from routers.auth import get_company_id, check_doc_limit
+from routers.validators import check_date, check_items_amounts
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -22,12 +23,20 @@ class OrderIn(BaseModel):
     note: str = ""
     items: List[Any] = []
 
-    @field_validator("date", "deliver")
+    @field_validator("date")
     @classmethod
-    def date_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("날짜는 필수입니다")
-        return v.strip()
+    def date_valid(cls, v: str) -> str:
+        return check_date(v, "수주일")
+
+    @field_validator("deliver")
+    @classmethod
+    def deliver_valid(cls, v: str) -> str:
+        return check_date(v, "납기일")
+
+    @field_validator("items")
+    @classmethod
+    def items_valid(cls, v: list) -> list:
+        return check_items_amounts(v)
 
 
 @router.get("")

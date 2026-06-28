@@ -46,6 +46,8 @@ export default function OrderPage({ renderLayout }) {
   }
 
   const save = async () => {
+    if (!form.customer_id) return showToast('거래처를 선택하세요','error')
+    if (!form.date || !form.deliver) return showToast('발주일/납기일을 입력하세요','error')
     setSaving(true)
     try {
       const payload = {...form, items:items.filter(i=>i.name), customer_id:+form.customer_id}

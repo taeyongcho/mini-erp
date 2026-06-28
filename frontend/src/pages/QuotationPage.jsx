@@ -50,6 +50,7 @@ export default function QuotationPage({ onNav, renderLayout }) {
   const save = async () => {
     if (!form.customer_id) return showToast('거래처를 선택하세요','error')
     if (!items.some(i=>i.name)) return showToast('품목을 입력하세요','error')
+    if (form.expire && form.date && form.expire < form.date) return showToast('유효기한은 견적일 이후여야 합니다','error')
     setSaving(true)
     try {
       const payload = {...form, items: items.filter(i=>i.name), customer_id: +form.customer_id}

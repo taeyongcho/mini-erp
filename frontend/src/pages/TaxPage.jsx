@@ -45,6 +45,8 @@ export default function TaxPage({ renderLayout }) {
   }
 
   const save = async () => {
+    if (!form.customer_id) return showToast('거래처를 선택하세요','error')
+    if (!form.date) return showToast('발행일을 입력하세요','error')
     setSaving(true)
     try {
       const its = items.filter(i=>i.name)

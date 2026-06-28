@@ -31,6 +31,8 @@ export default function PayablePage({ renderLayout }) {
   const totalRemaining = payables.reduce((s, p) => s + (p.remaining || 0), 0)
 
   async function handleAdd() {
+    if (!form.customer_id) return showToast('거래처를 선택하세요', 'error')
+    if (!(Number(form.amount) > 0)) return showToast('금액은 0보다 커야 합니다', 'error')
     try {
       await api.createPayable({ ...form, customer_id: Number(form.customer_id), amount: Number(form.amount), order_id: form.order_id || null })
       await refresh()
@@ -41,6 +43,8 @@ export default function PayablePage({ renderLayout }) {
   }
 
   async function handleSettle() {
+    const billable = (settleOpen.remaining || 0) + (settleOpen.settled_amount || 0)
+    if (Number(settleForm.settled_amount) > billable) return showToast('지급액이 청구금액을 초과할 수 없습니다', 'error')
     try {
       await api.settlePayable(settleOpen.id, { ...settleForm, settled_amount: Number(settleForm.settled_amount) })
       await refresh()

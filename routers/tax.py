@@ -7,6 +7,7 @@ from database import get_db
 import models
 from models import TaxStatus
 from routers.auth import get_company_id, check_doc_limit
+from routers.validators import check_date, check_items_amounts
 
 router = APIRouter(prefix="/api/taxes", tags=["taxes"])
 
@@ -22,10 +23,13 @@ class TaxIn(BaseModel):
 
     @field_validator("date")
     @classmethod
-    def date_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("날짜는 필수입니다")
-        return v.strip()
+    def date_valid(cls, v: str) -> str:
+        return check_date(v, "작성일")
+
+    @field_validator("items")
+    @classmethod
+    def items_valid(cls, v: list) -> list:
+        return check_items_amounts(v)
 
 
 def calc_supply_vat(items: list) -> tuple[float, float]:

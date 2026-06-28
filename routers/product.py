@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from database import get_db
 import models
 from routers.auth import get_company_id
@@ -13,7 +13,7 @@ class ProductIn(BaseModel):
     code: str
     name: str
     unit: str = "개"
-    price: float = 0
+    price: float = Field(default=0, ge=0)
     tax: bool = True
 
     @field_validator("code")

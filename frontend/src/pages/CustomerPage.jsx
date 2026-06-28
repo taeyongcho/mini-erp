@@ -3,7 +3,7 @@ import { Btn, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input } from '../co
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { CUSTOMER_TYPES } from '../constants/index.js'
-import { exportCSV, today } from '../utils/index.js'
+import { exportCSV, today, isBizNo, isPhone, isEmail } from '../utils/index.js'
 
 export default function CustomerPage({ renderLayout }) {
   const { data, refresh, showToast } = useData()
@@ -21,6 +21,9 @@ export default function CustomerPage({ renderLayout }) {
 
   const save = async () => {
     if (!form.name) return showToast('상호를 입력하세요','error')
+    if (!isBizNo(form.biz_no)) return showToast('사업자번호 형식이 올바르지 않습니다 (000-00-00000)','error')
+    if (!isPhone(form.phone)) return showToast('전화번호는 숫자와 하이픈만 입력하세요','error')
+    if (!isEmail(form.email)) return showToast('이메일 형식이 올바르지 않습니다','error')
     setSaving(true)
     try {
       if (editId) await api.updateCustomer(editId, form)

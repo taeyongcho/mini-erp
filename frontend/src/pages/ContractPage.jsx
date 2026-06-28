@@ -106,6 +106,7 @@ export default function ContractPage({ onNav, renderLayout }) {
   const save = async () => {
     if (!form.customer_id) return showToast('거래처를 선택하세요', 'error')
     if (!form.title) return showToast('계약명을 입력하세요', 'error')
+    if (form.start_date && form.end_date && form.end_date < form.start_date) return showToast('계약 종료일은 시작일 이후여야 합니다', 'error')
     setSaving(true)
     try {
       const its = items.filter(i => i.name)

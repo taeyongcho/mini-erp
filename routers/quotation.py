@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional, Any
 from database import get_db
 import models
 from models import QuotationStatus
 from routers.auth import get_company_id, check_doc_limit
+from routers.validators import check_date, valid_date, check_items_amounts
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
 
@@ -26,12 +27,26 @@ class QuotationIn(BaseModel):
             raise ValueError("견적번호는 Q- 로 시작해야 합니다")
         return v
 
-    @field_validator("date", "expire")
+    @field_validator("date")
     @classmethod
-    def date_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("날짜는 필수입니다")
-        return v.strip()
+    def date_valid(cls, v: str) -> str:
+        return check_date(v, "견적일")
+
+    @field_validator("expire")
+    @classmethod
+    def expire_valid(cls, v: str) -> str:
+        return check_date(v, "유효기한")
+
+    @field_validator("items")
+    @classmethod
+    def items_valid(cls, v: list) -> list:
+        return check_items_amounts(v)
+
+    @model_validator(mode="after")
+    def expire_after_date(self):
+        if valid_date(self.date) and valid_date(self.expire) and self.expire < self.date:
+            raise ValueError("유효기한은 견적일 이후여야 합니다")
+        return self
 
 
 @router.get("")

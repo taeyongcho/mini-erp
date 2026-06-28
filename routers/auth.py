@@ -3,9 +3,10 @@ from datetime import datetime, timedelta, date
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from database import get_db
 import models
+from routers.validators import check_biz_no, check_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
@@ -47,6 +48,16 @@ class SignupIn(BaseModel):
     password: str
     name: str = ""
     biz_no: str = ""
+
+    @field_validator("email")
+    @classmethod
+    def email_format(cls, v: str) -> str:
+        return check_email(v)
+
+    @field_validator("biz_no")
+    @classmethod
+    def biz_no_format(cls, v: str) -> str:
+        return check_biz_no(v)
 
 
 class LoginIn(BaseModel):
@@ -131,6 +142,16 @@ class ProfileIn(BaseModel):
     email: str = ""
     company_name: str = ""
     biz_no: str = ""
+
+    @field_validator("email")
+    @classmethod
+    def email_format(cls, v: str) -> str:
+        return check_email(v)
+
+    @field_validator("biz_no")
+    @classmethod
+    def biz_no_format(cls, v: str) -> str:
+        return check_biz_no(v)
 
 
 class PasswordIn(BaseModel):

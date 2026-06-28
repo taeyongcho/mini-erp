@@ -21,6 +21,7 @@ export default function ProductPage({ renderLayout }) {
 
   const save = async () => {
     if (!form.name) return showToast('품목명을 입력하세요','error')
+    if (+form.price < 0) return showToast('단가는 0 이상이어야 합니다','error')
     setSaving(true)
     try {
       const payload = {...form, price:+form.price, tax: form.tax===true||form.tax==='true'}

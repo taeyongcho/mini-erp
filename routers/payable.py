@@ -1,27 +1,38 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional
 from database import get_db
 import models
 from routers.auth import get_company_id
+from routers.validators import check_date
 
 router = APIRouter(prefix="/api/payables", tags=["payables"])
 
 
 class PayableIn(BaseModel):
     customer_id: int
-    amount: float
+    amount: float = Field(ge=0)
     due_date: str
     order_id: Optional[str] = None
     note: str = ""
 
+    @field_validator("due_date")
+    @classmethod
+    def due_valid(cls, v: str) -> str:
+        return check_date(v, "만기일")
+
 
 class SettleIn(BaseModel):
-    settled_amount: float
+    settled_amount: float = Field(ge=0)
     settled_date: str
     note: str = ""
+
+    @field_validator("settled_date")
+    @classmethod
+    def settled_valid(cls, v: str) -> str:
+        return check_date(v, "지급일")
 
 
 def row_to_dict(r, db, company_id):
@@ -77,6 +88,8 @@ def settle_payable(pid: int, data: SettleIn, db: Session = Depends(get_db), comp
     p = db.query(models.Payable).filter_by(id=pid, company_id=company_id).first()
     if not p:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
+    if data.settled_amount > (p.amount or 0):
+        raise HTTPException(400, "지급액이 청구금액을 초과할 수 없습니다")
     p.settled_amount = data.settled_amount
     p.settled_date = data.settled_date
     if data.note:

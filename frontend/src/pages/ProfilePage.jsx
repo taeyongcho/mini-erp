@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { FormGrid, FormGroup, Input, Btn, toast } from '../components/UI.jsx'
+import { isBizNo } from '../utils/index.js'
 
 export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
   const [profile, setProfile] = useState({
@@ -16,6 +17,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
   async function saveProfile() {
     if (!profile.company_name.trim()) return toast('업체명을 입력하세요', 'error')
     if (!profile.email.trim()) return toast('이메일을 입력하세요', 'error')
+    if (!isBizNo(profile.biz_no)) return toast('사업자번호 형식이 올바르지 않습니다 (000-00-00000)', 'error')
     setSavingProfile(true)
     try {
       const res = await api.updateProfile(profile)
