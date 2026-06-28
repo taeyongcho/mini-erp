@@ -5,6 +5,7 @@ from typing import List, Optional, Any
 from database import get_db
 import models
 from models import ContractStatus
+from routers.auth import get_company_id, check_doc_limit
 
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
 
@@ -50,26 +51,27 @@ def serialize(c):
 
 
 @router.get("")
-def list_contracts(db: Session = Depends(get_db)):
-    return [serialize(c) for c in db.query(models.Contract).all()]
+def list_contracts(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    return [serialize(c) for c in db.query(models.Contract).filter_by(company_id=company_id).all()]
 
 
 @router.get("/{cid}")
-def get_contract(cid: str, db: Session = Depends(get_db)):
-    c = db.query(models.Contract).filter_by(id=cid).first()
+def get_contract(cid: str, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Contract).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     return serialize(c)
 
 
 @router.post("")
-def create_contract(data: ContractIn, db: Session = Depends(get_db)):
-    if db.query(models.Contract).filter_by(id=data.id).first():
+def create_contract(data: ContractIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    check_doc_limit(company_id, db)
+    if db.query(models.Contract).filter_by(id=data.id, company_id=company_id).first():
         raise HTTPException(400, "이미 존재하는 계약번호입니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
-    c = models.Contract(**data.dict())
+    c = models.Contract(**data.dict(), company_id=company_id)
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -77,11 +79,11 @@ def create_contract(data: ContractIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{cid}")
-def update_contract(cid: str, data: ContractIn, db: Session = Depends(get_db)):
-    c = db.query(models.Contract).filter_by(id=cid).first()
+def update_contract(cid: str, data: ContractIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Contract).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
     for k, v in data.dict().items():
@@ -92,8 +94,8 @@ def update_contract(cid: str, data: ContractIn, db: Session = Depends(get_db)):
 
 
 @router.patch("/{cid}/status")
-def update_status(cid: str, payload: dict, db: Session = Depends(get_db)):
-    c = db.query(models.Contract).filter_by(id=cid).first()
+def update_status(cid: str, payload: dict, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Contract).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     new_status = payload.get("status")
@@ -108,12 +110,12 @@ def update_status(cid: str, payload: dict, db: Session = Depends(get_db)):
 
 
 @router.delete("/{cid}")
-def delete_contract(cid: str, db: Session = Depends(get_db)):
-    c = db.query(models.Contract).filter_by(id=cid).first()
+def delete_contract(cid: str, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Contract).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     # 수주에서 참조 중인지 확인
-    ref_order = db.query(models.Order).filter_by(contract_id=cid).first()
+    ref_order = db.query(models.Order).filter_by(contract_id=cid, company_id=company_id).first()
     if ref_order:
         raise HTTPException(400, "이 계약을 참조하는 수주가 있습니다")
     db.delete(c)

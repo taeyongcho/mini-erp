@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_db
 import models
+from routers.auth import get_company_id
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
@@ -27,14 +28,14 @@ class CustomerIn(BaseModel):
 
 
 @router.get("")
-def list_customers(db: Session = Depends(get_db)):
-    return db.query(models.Customer).all()
+def list_customers(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    return db.query(models.Customer).filter_by(company_id=company_id).all()
 
 
 @router.post("")
-def create_customer(data: CustomerIn, db: Session = Depends(get_db)):
+def create_customer(data: CustomerIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
     try:
-        c = models.Customer(**data.dict())
+        c = models.Customer(**data.dict(), company_id=company_id)
         db.add(c)
         db.commit()
         db.refresh(c)
@@ -45,8 +46,8 @@ def create_customer(data: CustomerIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{cid}")
-def update_customer(cid: int, data: CustomerIn, db: Session = Depends(get_db)):
-    c = db.query(models.Customer).filter_by(id=cid).first()
+def update_customer(cid: int, data: CustomerIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Customer).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     try:
@@ -61,17 +62,17 @@ def update_customer(cid: int, data: CustomerIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/{cid}")
-def delete_customer(cid: int, db: Session = Depends(get_db)):
-    c = db.query(models.Customer).filter_by(id=cid).first()
+def delete_customer(cid: int, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    c = db.query(models.Customer).filter_by(id=cid, company_id=company_id).first()
     if not c:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
 
     # 참조 문서 확인
     has_ref = (
-        db.query(models.Quotation).filter_by(customer_id=cid).first()
-        or db.query(models.Contract).filter_by(customer_id=cid).first()
-        or db.query(models.Order).filter_by(customer_id=cid).first()
-        or db.query(models.TaxInvoice).filter_by(customer_id=cid).first()
+        db.query(models.Quotation).filter_by(customer_id=cid, company_id=company_id).first()
+        or db.query(models.Contract).filter_by(customer_id=cid, company_id=company_id).first()
+        or db.query(models.Order).filter_by(customer_id=cid, company_id=company_id).first()
+        or db.query(models.TaxInvoice).filter_by(customer_id=cid, company_id=company_id).first()
     )
     if has_ref:
         raise HTTPException(400, "이 거래처를 참조하는 문서가 있습니다")

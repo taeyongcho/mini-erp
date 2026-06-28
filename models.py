@@ -31,9 +31,32 @@ class TaxStatus(str, enum.Enum):
     issued = "issued"
 
 
+class Company(Base):
+    __tablename__ = "companies"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)          # 업체명(상호)
+    biz_no = Column(String, default="")            # 사업자번호
+    plan = Column(String, default="free")          # free / pro
+    active = Column(Boolean, default=True)         # 정지 여부
+    created_at = Column(String, default="")
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)  # 슈퍼어드민은 null
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    name = Column(String, default="")
+    role = Column(String, default="owner")         # owner / member / superadmin
+    active = Column(Boolean, default=True)
+    created_at = Column(String, default="")
+
+
 class Customer(Base):
     __tablename__ = "customers"
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     name = Column(String, nullable=False)
     ceo = Column(String, default="")
     biz_no = Column(String, default="")
@@ -46,6 +69,7 @@ class Customer(Base):
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     code = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     unit = Column(String, default="개")
@@ -56,6 +80,7 @@ class Product(Base):
 class Quotation(Base):
     __tablename__ = "quotations"
     id = Column(String, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     date = Column(String, nullable=False)
     expire = Column(String, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"))
@@ -68,6 +93,7 @@ class Quotation(Base):
 class Contract(Base):
     __tablename__ = "contracts"
     id = Column(String, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     date = Column(String, nullable=False)
     start_date = Column(String, nullable=False)
     end_date = Column(String, nullable=False)
@@ -88,6 +114,7 @@ class Contract(Base):
 class Order(Base):
     __tablename__ = "orders"
     id = Column(String, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     date = Column(String, nullable=False)
     deliver = Column(String, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"))
@@ -102,6 +129,7 @@ class Order(Base):
 class TaxInvoice(Base):
     __tablename__ = "tax_invoices"
     id = Column(String, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     date = Column(String, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"))
     order_id = Column(String, nullable=True)
@@ -116,6 +144,7 @@ class TaxInvoice(Base):
 class Receivable(Base):
     __tablename__ = "receivables"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     tax_invoice_id = Column(String, ForeignKey("tax_invoices.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"))
     amount = Column(Float, default=0)
@@ -130,6 +159,7 @@ class Receivable(Base):
 class Payable(Base):
     __tablename__ = "payables"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     order_id = Column(String, ForeignKey("orders.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"))
     amount = Column(Float, default=0)
@@ -144,6 +174,7 @@ class Payable(Base):
 class AccountBalance(Base):
     __tablename__ = "account_balances"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     bank_name = Column(String, nullable=False)
     account_no = Column(String, default="")
     balance = Column(Float, default=0)

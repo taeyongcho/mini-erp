@@ -6,6 +6,7 @@ from typing import List, Optional, Any
 from database import get_db
 import models
 from models import OrderStatus
+from routers.auth import get_company_id, check_doc_limit
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -30,8 +31,8 @@ class OrderIn(BaseModel):
 
 
 @router.get("")
-def list_orders(db: Session = Depends(get_db)):
-    rows = db.query(models.Order).all()
+def list_orders(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    rows = db.query(models.Order).filter_by(company_id=company_id).all()
     result = []
     for o in rows:
         d = {c.name: getattr(o, c.name) for c in o.__table__.columns}
@@ -43,13 +44,14 @@ def list_orders(db: Session = Depends(get_db)):
 
 
 @router.post("")
-def create_order(data: OrderIn, db: Session = Depends(get_db)):
-    if db.query(models.Order).filter_by(id=data.id).first():
+def create_order(data: OrderIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    check_doc_limit(company_id, db)
+    if db.query(models.Order).filter_by(id=data.id, company_id=company_id).first():
         raise HTTPException(400, "이미 존재하는 수주번호입니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
-    o = models.Order(**data.dict())
+    o = models.Order(**data.dict(), company_id=company_id)
     db.add(o)
     db.commit()
     db.refresh(o)
@@ -57,11 +59,11 @@ def create_order(data: OrderIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{oid}")
-def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db)):
-    o = db.query(models.Order).filter_by(id=oid).first()
+def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    o = db.query(models.Order).filter_by(id=oid, company_id=company_id).first()
     if not o:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
     prev_status = o.status.value if hasattr(o.status, 'value') else str(o.status)
@@ -77,7 +79,7 @@ def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db)):
         vat = round(supply * 0.1)
         total = supply + vat
         if total > 0:
-            existing = db.query(models.Payable).filter_by(order_id=oid).first()
+            existing = db.query(models.Payable).filter_by(order_id=oid, company_id=company_id).first()
             if not existing:
                 due = str(date.today() + timedelta(days=30))
                 pay = models.Payable(
@@ -88,6 +90,7 @@ def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db)):
                     status="pending",
                     settled_amount=0,
                     created_at=str(date.today()),
+                    company_id=company_id,
                 )
                 db.add(pay)
                 db.commit()
@@ -95,12 +98,12 @@ def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/{oid}")
-def delete_order(oid: str, db: Session = Depends(get_db)):
-    o = db.query(models.Order).filter_by(id=oid).first()
+def delete_order(oid: str, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    o = db.query(models.Order).filter_by(id=oid, company_id=company_id).first()
     if not o:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     # 세금계산서에서 참조 중인지 확인
-    ref_tax = db.query(models.TaxInvoice).filter_by(order_id=oid).first()
+    ref_tax = db.query(models.TaxInvoice).filter_by(order_id=oid, company_id=company_id).first()
     if ref_tax:
         raise HTTPException(400, "이 수주를 참조하는 세금계산서가 있습니다")
     db.delete(o)

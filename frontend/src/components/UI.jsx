@@ -57,16 +57,25 @@ export function Layout({ page, onNav, topbarActions, children, badges }) {
   )
 }
 
-export function Btn({ children, onClick, variant='secondary', size='md', disabled }) {
+export function Btn({ children, onClick, variant='secondary', size='md', disabled, type='button', style: sx }) {
   const base = { padding: size==='sm' ? '4px 10px' : '7px 16px', borderRadius:6, border:'none', cursor: disabled?'default':'pointer', fontFamily:'var(--sans)', fontSize: size==='sm'?11:12, fontWeight:500, display:'inline-flex', alignItems:'center', gap:6, opacity: disabled ? 0.5 : 1 }
   const variants = { primary:{background:'var(--accent)',color:'#fff'}, secondary:{background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)'}, success:{background:'var(--success)',color:'#fff'}, danger:{background:'var(--danger)',color:'#fff'}, warn:{background:'var(--warn)',color:'#000'} }
-  return <button style={{...base,...(variants[variant]||variants.secondary)}} onClick={disabled?undefined:onClick}>{children}</button>
+  return <button type={type} style={{...base,...(variants[variant]||variants.secondary),...sx}} onClick={disabled?undefined:onClick}>{children}</button>
 }
 
 export function Badge({ status }) {
   const map = { draft:['초안','rgba(100,116,139,.2)','var(--muted)'], sent:['발송','rgba(79,143,255,.15)','var(--accent)'], approved:['승인','rgba(34,197,94,.15)','var(--success)'], rejected:['거절','rgba(239,68,68,.15)','var(--danger)'], ordered:['발주','rgba(245,158,11,.15)','var(--warn)'], completed:['완료','rgba(0,212,168,.15)','var(--accent2)'], issued:['발행완료','rgba(34,197,94,.15)','var(--success)'], pending:['미발행','rgba(245,158,11,.15)','var(--warn)'] }
   const [label, bg, color] = map[status] || ['', 'transparent', 'var(--muted)']
   return <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500, background:bg, color }}>{label}</span>
+}
+
+export function PlanBadge({ plan }) {
+  const map = {
+    free: ['무료', 'rgba(100,116,139,.2)', 'var(--muted)'],
+    pro: ['PRO', 'rgba(0,212,168,.18)', 'var(--accent2)'],
+  }
+  const [label, bg, color] = map[plan] || map.free
+  return <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: '.5px', background: bg, color }}>{label}</span>
 }
 
 export function Modal({ open, onClose, title, children, wide }) {

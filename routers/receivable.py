@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 from database import get_db
 import models
+from routers.auth import get_company_id
 
 router = APIRouter(prefix="/api/receivables", tags=["receivables"])
 
@@ -23,22 +24,25 @@ class SettleIn(BaseModel):
     note: str = ""
 
 
-def row_to_dict(r, db):
+def row_to_dict(r, db, company_id):
     d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
-    customer = db.query(models.Customer).filter_by(id=r.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=r.customer_id, company_id=company_id).first()
     d["customer_name"] = customer.name if customer else ""
     d["remaining"] = (d["amount"] or 0) - (d["settled_amount"] or 0)
     return d
 
 
 @router.get("")
-def list_receivables(db: Session = Depends(get_db)):
-    rows = db.query(models.Receivable).all()
-    return [row_to_dict(r, db) for r in rows]
+def list_receivables(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    rows = db.query(models.Receivable).filter_by(company_id=company_id).all()
+    return [row_to_dict(r, db, company_id) for r in rows]
 
 
 @router.post("")
-def create_receivable(data: ReceivableIn, db: Session = Depends(get_db)):
+def create_receivable(data: ReceivableIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
+    if not customer:
+        raise HTTPException(400, "존재하지 않는 거래처입니다")
     r = models.Receivable(
         customer_id=data.customer_id,
         amount=data.amount,
@@ -48,28 +52,29 @@ def create_receivable(data: ReceivableIn, db: Session = Depends(get_db)):
         status="pending",
         settled_amount=0,
         created_at=str(date.today()),
+        company_id=company_id,
     )
     db.add(r)
     db.commit()
     db.refresh(r)
-    return row_to_dict(r, db)
+    return row_to_dict(r, db, company_id)
 
 
 @router.put("/{rid}")
-def update_receivable(rid: int, data: ReceivableIn, db: Session = Depends(get_db)):
-    r = db.query(models.Receivable).filter_by(id=rid).first()
+def update_receivable(rid: int, data: ReceivableIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    r = db.query(models.Receivable).filter_by(id=rid, company_id=company_id).first()
     if not r:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     for k, v in data.dict().items():
         setattr(r, k, v)
     db.commit()
     db.refresh(r)
-    return row_to_dict(r, db)
+    return row_to_dict(r, db, company_id)
 
 
 @router.patch("/{rid}/settle")
-def settle_receivable(rid: int, data: SettleIn, db: Session = Depends(get_db)):
-    r = db.query(models.Receivable).filter_by(id=rid).first()
+def settle_receivable(rid: int, data: SettleIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    r = db.query(models.Receivable).filter_by(id=rid, company_id=company_id).first()
     if not r:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     r.settled_amount = data.settled_amount
@@ -79,12 +84,12 @@ def settle_receivable(rid: int, data: SettleIn, db: Session = Depends(get_db)):
     r.status = "settled" if data.settled_amount >= r.amount else "partial"
     db.commit()
     db.refresh(r)
-    return row_to_dict(r, db)
+    return row_to_dict(r, db, company_id)
 
 
 @router.delete("/{rid}")
-def delete_receivable(rid: int, db: Session = Depends(get_db)):
-    r = db.query(models.Receivable).filter_by(id=rid).first()
+def delete_receivable(rid: int, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    r = db.query(models.Receivable).filter_by(id=rid, company_id=company_id).first()
     if not r:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     db.delete(r)

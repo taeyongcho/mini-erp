@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
 from database import get_db
 import models
+from routers.auth import get_company_id
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -31,17 +32,17 @@ class ProductIn(BaseModel):
 
 
 @router.get("")
-def list_products(db: Session = Depends(get_db)):
-    return db.query(models.Product).all()
+def list_products(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    return db.query(models.Product).filter_by(company_id=company_id).all()
 
 
 @router.post("")
-def create_product(data: ProductIn, db: Session = Depends(get_db)):
-    existing = db.query(models.Product).filter_by(code=data.code).first()
+def create_product(data: ProductIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    existing = db.query(models.Product).filter_by(code=data.code, company_id=company_id).first()
     if existing:
         raise HTTPException(400, "이미 존재하는 품목코드입니다")
     try:
-        p = models.Product(**data.dict())
+        p = models.Product(**data.dict(), company_id=company_id)
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -52,14 +53,15 @@ def create_product(data: ProductIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{pid}")
-def update_product(pid: int, data: ProductIn, db: Session = Depends(get_db)):
-    p = db.query(models.Product).filter_by(id=pid).first()
+def update_product(pid: int, data: ProductIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    p = db.query(models.Product).filter_by(id=pid, company_id=company_id).first()
     if not p:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     # code 중복 확인 (자기 자신 제외)
     dup = db.query(models.Product).filter(
         models.Product.code == data.code,
-        models.Product.id != pid
+        models.Product.id != pid,
+        models.Product.company_id == company_id
     ).first()
     if dup:
         raise HTTPException(400, "이미 존재하는 품목코드입니다")
@@ -75,8 +77,8 @@ def update_product(pid: int, data: ProductIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/{pid}")
-def delete_product(pid: int, db: Session = Depends(get_db)):
-    p = db.query(models.Product).filter_by(id=pid).first()
+def delete_product(pid: int, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    p = db.query(models.Product).filter_by(id=pid, company_id=company_id).first()
     if not p:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     db.delete(p)

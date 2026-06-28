@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from database import engine, Base, init_db
 import models
-from routers import customer, product, quotation, order, tax, contract, auth, receivable, payable, account, convert
+from routers import customer, product, quotation, order, tax, contract, auth, receivable, payable, account, convert, admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(customer.router)
 app.include_router(product.router)
 app.include_router(quotation.router)

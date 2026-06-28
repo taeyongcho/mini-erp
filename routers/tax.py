@@ -6,6 +6,7 @@ from typing import List, Optional, Any
 from database import get_db
 import models
 from models import TaxStatus
+from routers.auth import get_company_id, check_doc_limit
 
 router = APIRouter(prefix="/api/taxes", tags=["taxes"])
 
@@ -39,8 +40,8 @@ def calc_supply_vat(items: list) -> tuple[float, float]:
 
 
 @router.get("")
-def list_taxes(db: Session = Depends(get_db)):
-    rows = db.query(models.TaxInvoice).all()
+def list_taxes(db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    rows = db.query(models.TaxInvoice).filter_by(company_id=company_id).all()
     result = []
     for t in rows:
         d = {c.name: getattr(t, c.name) for c in t.__table__.columns}
@@ -52,17 +53,18 @@ def list_taxes(db: Session = Depends(get_db)):
 
 
 @router.post("")
-def create_tax(data: TaxIn, db: Session = Depends(get_db)):
-    if db.query(models.TaxInvoice).filter_by(id=data.id).first():
+def create_tax(data: TaxIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    check_doc_limit(company_id, db)
+    if db.query(models.TaxInvoice).filter_by(id=data.id, company_id=company_id).first():
         raise HTTPException(400, "이미 존재하는 계산서번호입니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
     supply, vat = calc_supply_vat(data.items)
     payload = data.dict()
     payload["supply"] = supply
     payload["vat"] = vat
-    t = models.TaxInvoice(**payload)
+    t = models.TaxInvoice(**payload, company_id=company_id)
     db.add(t)
     db.commit()
     db.refresh(t)
@@ -70,11 +72,11 @@ def create_tax(data: TaxIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{tid}")
-def update_tax(tid: str, data: TaxIn, db: Session = Depends(get_db)):
-    t = db.query(models.TaxInvoice).filter_by(id=tid).first()
+def update_tax(tid: str, data: TaxIn, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    t = db.query(models.TaxInvoice).filter_by(id=tid, company_id=company_id).first()
     if not t:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
-    customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
+    customer = db.query(models.Customer).filter_by(id=data.customer_id, company_id=company_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
     supply, vat = calc_supply_vat(data.items)
@@ -89,8 +91,8 @@ def update_tax(tid: str, data: TaxIn, db: Session = Depends(get_db)):
 
 
 @router.patch("/{tid}/issue")
-def issue_tax(tid: str, db: Session = Depends(get_db)):
-    t = db.query(models.TaxInvoice).filter_by(id=tid).first()
+def issue_tax(tid: str, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    t = db.query(models.TaxInvoice).filter_by(id=tid, company_id=company_id).first()
     if not t:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     t.status = TaxStatus.issued
@@ -99,7 +101,7 @@ def issue_tax(tid: str, db: Session = Depends(get_db)):
     # 미수금 자동 생성
     total = (t.supply or 0) + (t.vat or 0)
     if total > 0:
-        existing = db.query(models.Receivable).filter_by(tax_invoice_id=tid).first()
+        existing = db.query(models.Receivable).filter_by(tax_invoice_id=tid, company_id=company_id).first()
         if not existing:
             due = str(date.today() + timedelta(days=30))
             rec = models.Receivable(
@@ -110,6 +112,7 @@ def issue_tax(tid: str, db: Session = Depends(get_db)):
                 status="pending",
                 settled_amount=0,
                 created_at=str(date.today()),
+                company_id=company_id,
             )
             db.add(rec)
             db.commit()
@@ -117,8 +120,8 @@ def issue_tax(tid: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{tid}")
-def delete_tax(tid: str, db: Session = Depends(get_db)):
-    t = db.query(models.TaxInvoice).filter_by(id=tid).first()
+def delete_tax(tid: str, db: Session = Depends(get_db), company_id: int = Depends(get_company_id)):
+    t = db.query(models.TaxInvoice).filter_by(id=tid, company_id=company_id).first()
     if not t:
         raise HTTPException(404, "해당 항목을 찾을 수 없습니다")
     db.delete(t)

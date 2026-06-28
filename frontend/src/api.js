@@ -7,7 +7,9 @@ async function req(method, path, body) {
   const opts = { method, headers }
   if (body !== undefined) opts.body = JSON.stringify(body)
   const r = await fetch(BASE + path, opts)
-  if (r.status === 401) {
+  // 로그인/회원가입 요청은 인증 흐름의 일부이므로 401 자동 로그아웃에서 제외
+  const isAuthAttempt = path === '/auth/login' || path === '/auth/signup'
+  if (r.status === 401 && !isAuthAttempt) {
     localStorage.removeItem('erp_token')
     localStorage.removeItem('erp_user')
     window.location.reload()
@@ -21,6 +23,15 @@ async function req(method, path, body) {
 }
 
 export const api = {
+  // 인증
+  signup: (d) => req('POST', '/auth/signup', d),
+  login: (d) => req('POST', '/auth/login', d),
+  me: () => req('GET', '/auth/me'),
+  // 슈퍼어드민
+  getCompanies: () => req('GET', '/admin/companies'),
+  setCompanyPlan: (id, plan) => req('PATCH', '/admin/companies/' + id + '/plan', { plan }),
+  toggleCompanyActive: (id) => req('PATCH', '/admin/companies/' + id + '/active'),
+
   getCustomers: () => req('GET', '/customers'),
   createCustomer: (d) => req('POST', '/customers', d),
   updateCustomer: (id, d) => req('PUT', `/customers/${id}`, d),
