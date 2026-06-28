@@ -1,4 +1,5 @@
 import enum
+from datetime import date
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, JSON, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from database import Base
@@ -110,3 +111,41 @@ class TaxInvoice(Base):
     note = Column(Text, default="")
     items = Column(JSON, default=[])
     customer = relationship("Customer")
+
+
+class Receivable(Base):
+    __tablename__ = "receivables"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tax_invoice_id = Column(String, ForeignKey("tax_invoices.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+    amount = Column(Float, default=0)
+    due_date = Column(String)
+    status = Column(String, default="pending")
+    settled_amount = Column(Float, default=0)
+    settled_date = Column(String, nullable=True)
+    note = Column(Text, default="")
+    created_at = Column(String, default="")
+
+
+class Payable(Base):
+    __tablename__ = "payables"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(String, ForeignKey("orders.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+    amount = Column(Float, default=0)
+    due_date = Column(String)
+    status = Column(String, default="pending")
+    settled_amount = Column(Float, default=0)
+    settled_date = Column(String, nullable=True)
+    note = Column(Text, default="")
+    created_at = Column(String, default="")
+
+
+class AccountBalance(Base):
+    __tablename__ = "account_balances"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bank_name = Column(String, nullable=False)
+    account_no = Column(String, default="")
+    balance = Column(Float, default=0)
+    updated_at = Column(String, default="")
+    note = Column(String, default="")

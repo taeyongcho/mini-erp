@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
@@ -63,10 +64,33 @@ def update_order(oid: str, data: OrderIn, db: Session = Depends(get_db)):
     customer = db.query(models.Customer).filter_by(id=data.customer_id).first()
     if not customer:
         raise HTTPException(400, "존재하지 않는 거래처입니다")
+    prev_status = o.status.value if hasattr(o.status, 'value') else str(o.status)
     for k, v in data.dict().items():
         setattr(o, k, v)
     db.commit()
     db.refresh(o)
+    # 미지급금 자동 생성 - completed로 변경될 때만
+    new_status = data.status.value if hasattr(data.status, 'value') else str(data.status)
+    if prev_status != "completed" and new_status == "completed":
+        items = data.items or []
+        supply = sum((it.get("qty", 0) or 0) * (it.get("price", 0) or 0) for it in items)
+        vat = round(supply * 0.1)
+        total = supply + vat
+        if total > 0:
+            existing = db.query(models.Payable).filter_by(order_id=oid).first()
+            if not existing:
+                due = str(date.today() + timedelta(days=30))
+                pay = models.Payable(
+                    order_id=oid,
+                    customer_id=data.customer_id,
+                    amount=total,
+                    due_date=due,
+                    status="pending",
+                    settled_amount=0,
+                    created_at=str(date.today()),
+                )
+                db.add(pay)
+                db.commit()
     return o
 
 

@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
@@ -95,6 +96,23 @@ def issue_tax(tid: str, db: Session = Depends(get_db)):
     t.status = TaxStatus.issued
     db.commit()
     db.refresh(t)
+    # 미수금 자동 생성
+    total = (t.supply or 0) + (t.vat or 0)
+    if total > 0:
+        existing = db.query(models.Receivable).filter_by(tax_invoice_id=tid).first()
+        if not existing:
+            due = str(date.today() + timedelta(days=30))
+            rec = models.Receivable(
+                tax_invoice_id=tid,
+                customer_id=t.customer_id,
+                amount=total,
+                due_date=due,
+                status="pending",
+                settled_amount=0,
+                created_at=str(date.today()),
+            )
+            db.add(rec)
+            db.commit()
     return t
 
 

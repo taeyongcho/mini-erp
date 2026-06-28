@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+  mini-erp:
+    build: .
+    container_name: mini-erp
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ERP_SECRET=change-this-secret
+      - ERP_USER=admin
+      - ERP_PASS=admin1234
+    networks:
+      - security-portal_default
+
+networks:
+  security-portal_default:
+    external: true

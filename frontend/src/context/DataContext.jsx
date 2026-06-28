@@ -6,7 +6,8 @@ const DataContext = createContext(null)
 export function DataProvider({ children }) {
   const [data, setData] = useState({
     customers: [], products: [], quotations: [],
-    contracts: [], orders: [], taxes: []
+    contracts: [], orders: [], taxes: [],
+    receivables: [], payables: [], accounts: []
   })
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState([])
@@ -14,12 +15,13 @@ export function DataProvider({ children }) {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [customers, products, quotations, contracts, orders, taxes] =
+      const [customers, products, quotations, contracts, orders, taxes, receivables, payables, accounts] =
         await Promise.all([
           api.getCustomers(), api.getProducts(), api.getQuotations(),
-          api.getContracts(), api.getOrders(), api.getTaxes()
+          api.getContracts(), api.getOrders(), api.getTaxes(),
+          api.getReceivables(), api.getPayables(), api.getAccounts()
         ])
-      setData({ customers, products, quotations, contracts, orders, taxes })
+      setData({ customers, products, quotations, contracts, orders, taxes, receivables, payables, accounts })
     } finally {
       setLoading(false)
     }

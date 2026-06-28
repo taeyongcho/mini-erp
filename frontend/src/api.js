@@ -52,4 +52,17 @@ export const api = {
   updateTax: (id, d) => req('PUT', `/taxes/${id}`, d),
   issueTax: (id) => req('PATCH', `/taxes/${id}/issue`, {}),
   deleteTax: (id) => req('DELETE', `/taxes/${id}`),
+
+  getReceivables: () => req('GET', '/receivables'),
+  createReceivable: (d) => req('POST', '/receivables', d),
+  settleReceivable: (id, d) => req('PATCH', '/receivables/' + id + '/settle', d),
+  deleteReceivable: (id) => req('DELETE', '/receivables/' + id),
+  getPayables: () => req('GET', '/payables'),
+  createPayable: (d) => req('POST', '/payables', d),
+  settlePayable: (id, d) => req('PATCH', '/payables/' + id + '/settle', d),
+  deletePayable: (id) => req('DELETE', '/payables/' + id),
+  getAccounts: () => req('GET', '/accounts'),
+  createAccount: (d) => req('POST', '/accounts', d),
+  updateAccount: (id, d) => req('PUT', '/accounts/' + id, d),
+  deleteAccount: (id) => req('DELETE', '/accounts/' + id),
 }

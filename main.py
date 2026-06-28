@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from database import engine, Base, init_db
 import models
-from routers import customer, product, quotation, order, tax, contract, auth
+from routers import customer, product, quotation, order, tax, contract, auth, receivable, payable, account, convert
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ app.include_router(quotation.router)
 app.include_router(contract.router)
 app.include_router(order.router)
 app.include_router(tax.router)
+app.include_router(receivable.router)
+app.include_router(payable.router)
+app.include_router(account.router)
+app.include_router(convert.router)
 
 
 def get_static_path():
@@ -84,7 +88,7 @@ def open_browser():
 
 
 if __name__ == "__main__":
-    print(f"영업 ERP 서버 시작 — http://localhost:{PORT}")
+    print(f"ERP server starting - http://localhost:{PORT}")
     if getattr(sys, 'frozen', False):
         t = threading.Thread(target=open_browser, daemon=True)
         t.start()
