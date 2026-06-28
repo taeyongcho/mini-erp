@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Select, LineEditor, Summary } from '../components/UI.jsx'
+import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, SearchSelect, LineEditor, Summary } from '../components/UI.jsx'
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { QUOTATION_STATUSES } from '../constants/index.js'
-import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
+import { formatQuoteNo, normalizeItems, today, dateAdd, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
 
 function printDoc() {
   const content = document.getElementById('print-area').innerHTML
@@ -28,38 +28,60 @@ function printDoc() {
   win.document.close()
 }
 
-export default function QuotationPage({ onNav, renderLayout }) {
+const EXPIRE_PRESETS = [3, 5, 7, 14, 30]
+
+export default function QuotationPage({ onNav, renderLayout, user }) {
   const { data, refresh, showToast } = useData()
   const { quotations, customers } = data
+  const quoteFormat = user?.quote_format || 'Q-{YYYY}-{seq}'
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({})
-  const [items, setItems] = useState([{name:'',qty:1,price:0,unit:'개'}])
+  const [items, setItems] = useState([{name:'',qty:'',price:''}])
   const [saving, setSaving] = useState(false)
 
-  const openForm = (id) => {
+  // id가 있으면 수정, asCopy면 발송완료 건을 새 번호로 복제
+  const openForm = (id, asCopy=false) => {
     const q = id ? quotations.find(x=>x.id===id) : null
-    setForm(q ? {...q} : { id: generateId('Q', quotations), date: today(), expire: dateAdd(today(),30), customer_id: customers[0]?.id||'', status:'draft', note:'' })
-    setItems(q ? (q.items||[]) : [{name:'',qty:1,price:0,unit:'개'}])
+    if (q && asCopy) {
+      setForm({ ...q, id: formatQuoteNo(quoteFormat, quotations), date: today(), status:'draft' })
+      setItems(q.items?.length ? q.items : [{name:'',qty:'',price:''}])
+      setModal({mode:'form', id:null})
+      return
+    }
+    setForm(q ? {...q} : { id: formatQuoteNo(quoteFormat, quotations), date: today(), expire: dateAdd(today(),30), customer_id: customers[0]?.id||'', status:'draft', note:'' })
+    setItems(q ? (q.items?.length ? q.items : [{name:'',qty:'',price:''}]) : [{name:'',qty:'',price:''}])
     setModal({mode:'form', id})
   }
 
   const save = async () => {
     if (!form.customer_id) return showToast('거래처를 선택하세요','error')
-    if (!items.some(i=>i.name)) return showToast('품목을 입력하세요','error')
+    const its = normalizeItems(items)
+    if (!its.length) return showToast('품목을 입력하세요','error')
     if (form.expire && form.date && form.expire < form.date) return showToast('유효기한은 견적일 이후여야 합니다','error')
     setSaving(true)
     try {
-      const payload = {...form, items: items.filter(i=>i.name), customer_id: +form.customer_id}
+      const payload = {...form, status: form.status||'draft', items: its, customer_id: +form.customer_id}
       if (modal.id) await api.updateQuotation(modal.id, payload)
       else await api.createQuotation(payload)
       showToast(modal.id ? '견적서가 수정되었습니다' : '견적서가 저장되었습니다')
       await refresh(); setModal(null)
     } catch(e) { showToast(e.message,'error') }
     setSaving(false)
+  }
+
+  // 발송: 상태를 발송완료로 잠그고 PDF 출력창 안내
+  const send = async (q) => {
+    if (!confirm(`${q.id} 견적서를 발송완료 처리할까요?\n발송 후에는 수정 시 새 번호로 복제 저장됩니다.`)) return
+    try {
+      await api.updateQuotation(q.id, {...q, status:'sent', customer_id:+q.customer_id})
+      showToast('발송완료 처리되었습니다')
+      await refresh()
+      setModal({mode:'view', id:q.id})
+    } catch(e){ showToast(e.message,'error') }
   }
 
   const del = async (id) => {
@@ -74,9 +96,9 @@ export default function QuotationPage({ onNav, renderLayout }) {
   }
 
   const convertToOrder = async (q) => {
-    const oid = generateId('PO', data.orders)
+    const oid = formatQuoteNo('PO-{YYYY}-{seq}', data.orders)
     try {
-      await api.createOrder({ id:oid, date:today(), deliver:dateAdd(today(),14), customer_id:q.customer_id, quotation_id:q.id, status:'ordered', note:`견적 ${q.id} 기반`, items:q.items })
+      await api.createOrder({ id:oid, date:today(), deliver:dateAdd(today(),14), customer_id:+q.customer_id, quotation_id:q.id, status:'ordered', note:`견적 ${q.id} 기반`, items:q.items })
       showToast(`발주서 ${oid} 생성 완료`); await refresh(); onNav('order')
     } catch(e){ showToast(e.message,'error') }
   }
@@ -140,16 +162,24 @@ export default function QuotationPage({ onNav, renderLayout }) {
           {filtered.map(q => {
             const c = customers.find(x=>x.id===q.customer_id)||{}
             const {supply,vat,total} = calcItems(q.items||[])
+            const isSent = q.status==='sent'
             return <tr key={q.id}>
               <Td mono accent><span style={{cursor:'pointer'}} onClick={()=>viewQ(q.id)}>{q.id}</span></Td>
               <Td>{c.name}</Td><Td>{q.date}</Td><Td>{q.expire}</Td>
               <Td right>{fmt(supply)}</Td><Td right>{fmt(vat)}</Td><Td right accent>{fmtW(total)}</Td>
               <Td><Badge status={q.status}/></Td>
               <Td><div style={{display:'flex',gap:4}}>
-                <Btn size="sm" onClick={()=>openForm(q.id)}>수정</Btn>
-                {q.status==='approved'&&<Btn size="sm" variant="success" onClick={()=>convertToContract(q)}>계약전환</Btn>}
-                {q.status==='approved'&&<Btn size="sm" variant="warn" onClick={()=>convertToOrder(q)}>발주전환</Btn>}
-                <Btn size="sm" variant="danger" onClick={()=>del(q.id)}>삭제</Btn>
+                {!isSent && <>
+                  <Btn size="sm" onClick={()=>openForm(q.id)}>수정</Btn>
+                  <Btn size="sm" variant="primary" onClick={()=>send(q)}>발송</Btn>
+                  <Btn size="sm" variant="danger" onClick={()=>del(q.id)}>삭제</Btn>
+                </>}
+                {isSent && <>
+                  <Btn size="sm" onClick={()=>openForm(q.id, true)}>수정(복제)</Btn>
+                  <Btn size="sm" variant="success" onClick={()=>convertToContract(q)}>계약전환</Btn>
+                  <Btn size="sm" variant="warn" onClick={()=>convertToOrder(q)}>발주전환</Btn>
+                  <Btn size="sm" variant="danger" onClick={()=>del(q.id)}>삭제</Btn>
+                </>}
               </div></Td>
             </tr>
           })}
@@ -161,11 +191,17 @@ export default function QuotationPage({ onNav, renderLayout }) {
       <Modal open={modal?.mode==='form'} onClose={()=>setModal(null)} title={modal?.id?'견적서 수정':'견적서 작성'} wide>
         <FormGrid>
           <FormGroup label="견적번호"><Input value={form.id} readOnly mono /></FormGroup>
-          <FormGroup label="거래처"><Select value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} /></FormGroup>
+          <FormGroup label="거래처"><SearchSelect value={String(form.customer_id||'')} onChange={v=>setForm(f=>({...f,customer_id:v}))} options={custOpts} placeholder="거래처명 검색" /></FormGroup>
           <FormGroup label="견적일"><Input type="date" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} /></FormGroup>
-          <FormGroup label="유효기간"><Input type="date" value={form.expire} onChange={v=>setForm(f=>({...f,expire:v}))} /></FormGroup>
-          <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={QUOTATION_STATUSES} /></FormGroup>
-          <FormGroup label="비고"><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
+          <FormGroup label="유효기간">
+            <Input type="date" value={form.expire} onChange={v=>setForm(f=>({...f,expire:v}))} />
+            <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
+              {EXPIRE_PRESETS.map(n=>(
+                <Btn key={n} size="sm" onClick={()=>setForm(f=>({...f,expire:dateAdd(f.date||today(),n)}))}>{n}일</Btn>
+              ))}
+            </div>
+          </FormGroup>
+          <FormGroup label="비고" full><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
         </FormGrid>
         <LineEditor items={items} onChange={setItems} />
         <Summary items={items} />
@@ -179,6 +215,7 @@ export default function QuotationPage({ onNav, renderLayout }) {
       <Modal open={modal?.mode==='view'} onClose={()=>setModal(null)} title="견적서 상세" wide>
         {q_view && (() => {
           const {supply,vat,total}=calcItems(q_view.items||[])
+          const isSent = q_view.status==='sent'
           return <>
             <div id="print-area" style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:24}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:20}}>
@@ -188,7 +225,7 @@ export default function QuotationPage({ onNav, renderLayout }) {
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20,padding:16,background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}}>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>공급자</div>
-                  {[['상호','Axiosoft (주)'],['견적일',q_view.date],['유효기간',q_view.expire]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:70}}>{k}</span><span>{v}</span></div>)}
+                  {[['상호',user?.company||'-'],['견적일',q_view.date],['유효기간',q_view.expire]].map(([k,v])=><div key={k} style={{display:'flex',gap:8,fontSize:12,marginBottom:4}}><span style={{color:'var(--muted)',minWidth:70}}>{k}</span><span>{v}</span></div>)}
                 </div>
                 <div>
                   <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.8px',marginBottom:8}}>공급받는자</div>
@@ -196,8 +233,8 @@ export default function QuotationPage({ onNav, renderLayout }) {
                 </div>
               </div>
               <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr>{['#','품목명','단위','수량','단가','금액'].map((h,i)=><th key={i} style={{padding:'8px 10px',fontSize:10,color:'var(--muted)',textAlign:i>=3?'right':'left',borderBottom:'1px solid var(--border)',background:'var(--surface)'}}>{h}</th>)}</tr></thead>
-                <tbody>{(q_view.items||[]).map((it,i)=><tr key={i}><td style={{padding:'10px',fontFamily:'var(--mono)',color:'var(--muted)',fontSize:12}}>{String(i+1).padStart(2,'0')}</td><td style={{padding:'10px',fontSize:12}}>{it.name}</td><td style={{padding:'10px',fontSize:12}}>{it.unit}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12}}>{it.qty}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12}}>{fmt(it.price)}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12,color:'var(--accent)'}}>{fmt((it.qty||0)*(it.price||0))}</td></tr>)}</tbody>
+                <thead><tr>{['#','품목명','수량','단가','금액'].map((h,i)=><th key={i} style={{padding:'8px 10px',fontSize:10,color:'var(--muted)',textAlign:i>=2?'right':'left',borderBottom:'1px solid var(--border)',background:'var(--surface)'}}>{h}</th>)}</tr></thead>
+                <tbody>{(q_view.items||[]).map((it,i)=><tr key={i}><td style={{padding:'10px',fontFamily:'var(--mono)',color:'var(--muted)',fontSize:12}}>{String(i+1).padStart(2,'0')}</td><td style={{padding:'10px',fontSize:12}}>{it.name}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12}}>{it.qty}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12}}>{fmt(it.price)}</td><td style={{padding:'10px',fontFamily:'var(--mono)',textAlign:'right',fontSize:12,color:'var(--accent)'}}>{fmt((it.qty||0)*(it.price||0))}</td></tr>)}</tbody>
               </table>
               <div style={{display:'flex',justifyContent:'flex-end',marginTop:16}}>
                 <div style={{minWidth:280,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:16}}>
@@ -209,9 +246,11 @@ export default function QuotationPage({ onNav, renderLayout }) {
             <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20}}>
               <Btn onClick={()=>setModal(null)}>닫기</Btn>
               <Btn onClick={printDoc}>🖨️ 인쇄/PDF</Btn>
-              <Btn variant="primary" onClick={()=>openForm(q_view.id)}>수정</Btn>
-              {q_view.status==='approved'&&<Btn variant="success" onClick={()=>convertToContract(q_view)}>계약서 전환</Btn>}
-              {q_view.status==='approved'&&<Btn variant="warn" onClick={()=>{setModal(null);convertToOrder(q_view)}}>발주서 전환</Btn>}
+              {!isSent && <Btn variant="primary" onClick={()=>openForm(q_view.id)}>수정</Btn>}
+              {!isSent && <Btn variant="success" onClick={()=>send(q_view)}>발송</Btn>}
+              {isSent && <Btn onClick={()=>openForm(q_view.id, true)}>수정(복제)</Btn>}
+              {isSent && <Btn variant="success" onClick={()=>convertToContract(q_view)}>계약서 전환</Btn>}
+              {isSent && <Btn variant="warn" onClick={()=>{setModal(null);convertToOrder(q_view)}}>발주서 전환</Btn>}
             </div>
           </>
         })()}

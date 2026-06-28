@@ -19,6 +19,29 @@ export function generateId(prefix, list, field = 'id') {
 // generateId('PO', orders)      → 'PO-2025-001'
 // generateId('TAX', taxes)      → 'TAX-2025-001'
 
+// 업체별 견적번호 포맷 생성기
+// 템플릿 placeholder: {YYYY} 4자리연도, {YY} 2자리연도, {MM} 월, {seq} 또는 {seq:n} 일련번호(n자리 0채움)
+export function formatQuoteNo(template, quotations = []) {
+  const now = new Date()
+  const yyyy = String(now.getFullYear())
+  const yy = yyyy.slice(2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const t = template || 'Q-{YYYY}-{seq}'
+  const seqCount = quotations.filter(q => (q.date || '').slice(0, 4) === yyyy).length + 1
+  return t
+    .replace(/\{YYYY\}/g, yyyy)
+    .replace(/\{YY\}/g, yy)
+    .replace(/\{MM\}/g, mm)
+    .replace(/\{seq(?::(\d+))?\}/g, (_, n) => String(seqCount).padStart(n ? +n : 3, '0'))
+}
+
+// 품목 정규화: 품목명 있는 행만 남기고 qty/price를 숫자로 변환
+export function normalizeItems(items = []) {
+  return items
+    .filter(i => i.name && i.name.trim())
+    .map(i => ({ ...i, qty: Number(i.qty) || 0, price: Number(i.price) || 0 }))
+}
+
 // 날짜
 export function today() {
   return new Date().toISOString().slice(0, 10)

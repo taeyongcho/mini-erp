@@ -3,7 +3,7 @@ import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Selec
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { CONTRACT_STATUSES } from '../constants/index.js'
-import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
+import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 const STATUSES = [
   { value: 'reviewing',     label: '검토중',   color: 'rgba(100,116,139,.2)',   text: 'var(--muted)' },
@@ -109,7 +109,7 @@ export default function ContractPage({ onNav, renderLayout }) {
     if (form.start_date && form.end_date && form.end_date < form.start_date) return showToast('계약 종료일은 시작일 이후여야 합니다', 'error')
     setSaving(true)
     try {
-      const its = items.filter(i => i.name)
+      const its = normalizeItems(items)
       const { total } = calcItems(its)
       const payload = {
         ...form,

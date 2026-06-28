@@ -9,6 +9,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
     email: user?.email || '',
     company_name: user?.company || '',
     biz_no: user?.biz_no || '',
+    quote_format: user?.quote_format || 'Q-{YYYY}-{seq}',
   })
   const [pw, setPw] = useState({ current_password: '', new_password: '', confirm: '' })
   const [savingProfile, setSavingProfile] = useState(false)
@@ -23,7 +24,7 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
       const res = await api.updateProfile(profile)
       // 새 토큰 + 갱신된 user 정보 저장
       if (res.token) localStorage.setItem('erp_token', res.token)
-      const merged = { ...user, ...res.user, biz_no: profile.biz_no }
+      const merged = { ...user, ...res.user, biz_no: profile.biz_no, quote_format: profile.quote_format }
       localStorage.setItem('erp_user', JSON.stringify(merged))
       onUserUpdate && onUserUpdate(merged)
       toast('내 정보가 변경되었습니다')
@@ -74,6 +75,12 @@ export default function ProfilePage({ renderLayout, user, onUserUpdate }) {
           </FormGroup>
           <FormGroup label="사업자번호">
             <Input value={profile.biz_no} onChange={v => setProfile(p => ({ ...p, biz_no: v }))} />
+          </FormGroup>
+          <FormGroup label="견적번호 형식" full>
+            <Input value={profile.quote_format} onChange={v => setProfile(p => ({ ...p, quote_format: v }))} placeholder="Q-{YYYY}-{seq}" mono />
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+              사용 가능: {'{YYYY}'} 연도4자리 · {'{YY}'} 연도2자리 · {'{MM}'} 월 · {'{seq}'} 일련번호 (예: Q-{'{YYYY}'}-{'{seq}'} → Q-{new Date().getFullYear()}-001)
+            </div>
           </FormGroup>
         </FormGrid>
         <div style={{ marginTop: 20 }}>

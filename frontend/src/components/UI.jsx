@@ -84,7 +84,7 @@ export function Btn({ children, onClick, variant='secondary', size='md', disable
 }
 
 export function Badge({ status }) {
-  const map = { draft:['초안','rgba(100,116,139,.2)','var(--muted)'], sent:['발송','rgba(79,143,255,.15)','var(--accent)'], approved:['승인','rgba(34,197,94,.15)','var(--success)'], rejected:['거절','rgba(239,68,68,.15)','var(--danger)'], ordered:['발주','rgba(245,158,11,.15)','var(--warn)'], completed:['완료','rgba(0,212,168,.15)','var(--accent2)'], issued:['발행완료','rgba(34,197,94,.15)','var(--success)'], pending:['미발행','rgba(245,158,11,.15)','var(--warn)'] }
+  const map = { draft:['작성중','rgba(100,116,139,.2)','var(--muted)'], sent:['발송완료','rgba(34,197,94,.15)','var(--success)'], approved:['승인','rgba(34,197,94,.15)','var(--success)'], rejected:['거절','rgba(239,68,68,.15)','var(--danger)'], ordered:['발주','rgba(245,158,11,.15)','var(--warn)'], completed:['완료','rgba(0,212,168,.15)','var(--accent2)'], issued:['발행완료','rgba(34,197,94,.15)','var(--success)'], pending:['미발행','rgba(245,158,11,.15)','var(--warn)'] }
   const [label, bg, color] = map[status] || ['', 'transparent', 'var(--muted)']
   return <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500, background:bg, color }}>{label}</span>
 }
@@ -172,11 +172,12 @@ export const Td = ({children, mono, right, accent}) => <td style={{ padding:'11p
 
 export function LineEditor({ items, onChange }) {
   const update = (i, field, val) => { const next=[...items]; next[i]={...next[i],[field]:val}; onChange(next) }
-  const addRow = () => onChange([...items, { name:'', qty:1, price:0, unit:'개' }])
+  const addRow = () => onChange([...items, { name:'', qty:'', price:'' }])
   const remove = (i) => onChange(items.filter((_,j)=>j!==i))
-  const cellInput = (i, field, type='text', right=false) => (
-    <input type={type} value={items[i]?.[field]??''} onChange={e=>update(i,field,type==='number'?+e.target.value:e.target.value)}
-      style={{ background:'transparent', border:'1px solid transparent', borderRadius:4, padding:'5px 8px', color:'var(--text)', fontFamily:'var(--sans)', fontSize:12, outline:'none', width:'100%', textAlign:right?'right':'left' }}
+  const cellInput = (i, field, { num=false, right=false, ph='' }={}) => (
+    <input value={items[i]?.[field]??''} placeholder={ph} inputMode={num?'numeric':'text'}
+      onChange={e=>{ const v=e.target.value; update(i, field, num ? v.replace(/[^0-9.]/g,'') : v) }}
+      style={{ background:'transparent', border:'1px solid transparent', borderRadius:4, padding:'5px 8px', color:'var(--text)', fontFamily: num?'var(--mono)':'var(--sans)', fontSize:12, outline:'none', width:'100%', textAlign:right?'right':'left' }}
       onFocus={e=>{ e.target.style.borderColor='var(--border)'; e.target.style.background='var(--surface2)' }}
       onBlur={e=>{ e.target.style.borderColor='transparent'; e.target.style.background='transparent' }} />
   )
@@ -185,22 +186,51 @@ export function LineEditor({ items, onChange }) {
       <div style={{ fontSize:12, color:'var(--label)', textTransform:'uppercase', letterSpacing:'.7px', marginBottom:10 }}>품목 명세</div>
       <table style={{ width:'100%', borderCollapse:'collapse' }}>
         <thead>
-          <tr>{['품목명','단위','수량','단가','금액',''].map((h,i)=><th key={i} style={{ padding:'8px 10px', fontSize:10, color:'var(--muted)', textAlign: i>=2?'right':'left', borderBottom:'1px solid var(--border)', background:'var(--surface2)' }}>{h}</th>)}</tr>
+          <tr>{[['품목명','left'],['수량','right'],['단가(원)','right'],['금액(원)','right'],['','right']].map(([h,al],i)=><th key={i} style={{ padding:'8px 10px', fontSize:10, color:'var(--muted)', textAlign:al, borderBottom:'1px solid var(--border)', background:'var(--surface2)' }}>{h}</th>)}</tr>
         </thead>
         <tbody>
           {items.map((it,i)=>(
             <tr key={i} style={{ borderBottom:'1px solid rgba(42,48,80,.4)' }}>
-              <td style={{ padding:'4px 4px', width:'35%' }}>{cellInput(i,'name')}</td>
-              <td style={{ padding:'4px 4px', width:'10%' }}>{cellInput(i,'unit')}</td>
-              <td style={{ padding:'4px 4px', width:'12%' }}>{cellInput(i,'qty','number',true)}</td>
-              <td style={{ padding:'4px 4px', width:'20%' }}>{cellInput(i,'price','number',true)}</td>
-              <td style={{ padding:'4px 8px', width:'15%', fontFamily:'var(--mono)', fontSize:12, textAlign:'right', color:'var(--accent)' }}>{((it.qty||0)*(it.price||0)).toLocaleString('ko-KR')}</td>
-              <td style={{ padding:'4px 4px', width:40 }}><button onClick={()=>remove(i)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:14 }}>🗑</button></td>
+              <td style={{ padding:'4px 4px', width:'48%' }}>{cellInput(i,'name',{ph:'품목명 입력'})}</td>
+              <td style={{ padding:'4px 4px', width:'13%' }}>{cellInput(i,'qty',{num:true,right:true,ph:'0'})}</td>
+              <td style={{ padding:'4px 4px', width:'20%' }}>{cellInput(i,'price',{num:true,right:true,ph:'0'})}</td>
+              <td style={{ padding:'4px 8px', width:'17%', fontFamily:'var(--mono)', fontSize:12, textAlign:'right', color:'var(--accent)' }}>{((Number(it.qty)||0)*(Number(it.price)||0)).toLocaleString('ko-KR')}</td>
+              <td style={{ padding:'4px 8px', width:36, textAlign:'right' }}><button onClick={()=>remove(i)} title="행 삭제" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:14 }}>🗑</button></td>
             </tr>
           ))}
         </tbody>
       </table>
       <div style={{marginTop:8}}><Btn size="sm" onClick={addRow}>+ 행 추가</Btn></div>
+    </div>
+  )
+}
+
+// 검색형 선택 (거래처 등 항목이 많을 때 타이핑으로 필터)
+export function SearchSelect({ value, onChange, options, placeholder='검색...' }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const sel = options.find(o => String(o.value) === String(value))
+  const filtered = q ? options.filter(o => o.label.toLowerCase().includes(q.toLowerCase())) : options
+  return (
+    <div style={{ position:'relative' }}>
+      <input value={open ? q : (sel?.label || '')} placeholder={placeholder}
+        onFocus={()=>{ setOpen(true); setQ('') }}
+        onChange={e=>setQ(e.target.value)}
+        onBlur={()=>setTimeout(()=>setOpen(false), 150)}
+        style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, padding:'9px 12px', color:'var(--text)', fontFamily:'var(--sans)', fontSize:13, outline:'none', width:'100%' }} />
+      {open && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, marginTop:4, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:6, maxHeight:220, overflowY:'auto', zIndex:50, boxShadow:'0 8px 24px rgba(0,0,0,.3)' }}>
+          {filtered.length===0 && <div style={{ padding:'10px 12px', fontSize:12, color:'var(--muted)' }}>검색 결과 없음</div>}
+          {filtered.map(o => (
+            <div key={o.value} onMouseDown={()=>{ onChange(String(o.value)); setOpen(false) }}
+              style={{ padding:'9px 12px', fontSize:13, cursor:'pointer', color: String(o.value)===String(value)?'var(--accent)':'var(--text)' }}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--surface2)'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

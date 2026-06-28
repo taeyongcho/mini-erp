@@ -3,7 +3,7 @@ import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Selec
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { TAX_STATUSES } from '../constants/index.js'
-import { generateId, today, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
+import { generateId, today, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 function printDoc() {
   const content = document.getElementById('print-area').innerHTML
@@ -49,7 +49,7 @@ export default function TaxPage({ renderLayout }) {
     if (!form.date) return showToast('발행일을 입력하세요','error')
     setSaving(true)
     try {
-      const its = items.filter(i=>i.name)
+      const its = normalizeItems(items)
       const { supply, vat } = calcItems(its)
       const payload = {...form, customer_id:+form.customer_id, order_id:form.order_id||null, items:its, supply, vat}
       await api.createTax(payload)

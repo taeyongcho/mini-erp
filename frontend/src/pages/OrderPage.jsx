@@ -3,7 +3,7 @@ import { Btn, Badge, Modal, TableWrap, Th, Td, FormGrid, FormGroup, Input, Selec
 import { api } from '../api.js'
 import { useData } from '../context/DataContext.jsx'
 import { ORDER_STATUSES } from '../constants/index.js'
-import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW } from '../utils/index.js'
+import { generateId, today, dateAdd, calcItems, exportCSV, fmt, fmtW, normalizeItems } from '../utils/index.js'
 
 function printDoc() {
   const content = document.getElementById('print-area').innerHTML
@@ -50,7 +50,7 @@ export default function OrderPage({ renderLayout }) {
     if (!form.date || !form.deliver) return showToast('발주일/납기일을 입력하세요','error')
     setSaving(true)
     try {
-      const payload = {...form, items:items.filter(i=>i.name), customer_id:+form.customer_id}
+      const payload = {...form, items:normalizeItems(items), customer_id:+form.customer_id}
       if (modal.id) await api.updateOrder(modal.id, payload)
       else await api.createOrder(payload)
       showToast(modal.id ? '발주서가 수정되었습니다' : '발주서가 저장되었습니다')

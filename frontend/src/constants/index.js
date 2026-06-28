@@ -1,8 +1,6 @@
 export const QUOTATION_STATUSES = [
-  { value: 'draft', label: '초안' },
-  { value: 'sent', label: '발송됨' },
-  { value: 'approved', label: '승인' },
-  { value: 'rejected', label: '반려' },
+  { value: 'draft', label: '작성중' },
+  { value: 'sent', label: '발송완료' },
 ]
 
 export const CONTRACT_STATUSES = [

@@ -38,6 +38,7 @@ class Company(Base):
     biz_no = Column(String, default="")            # 사업자번호
     plan = Column(String, default="free")          # free / pro
     active = Column(Boolean, default=True)         # 정지 여부
+    quote_format = Column(String, default="Q-{YYYY}-{seq}")  # 견적번호 포맷 템플릿
     created_at = Column(String, default="")
 
 

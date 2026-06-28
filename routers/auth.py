@@ -134,7 +134,8 @@ def me(payload: dict = Depends(get_current), db: Session = Depends(get_db)):
     company = db.query(models.Company).filter_by(id=user.company_id).first()
     return {"email": user.email, "name": user.name, "role": user.role,
             "company": company.name if company else "", "plan": company.plan if company else "free",
-            "biz_no": company.biz_no if company else ""}
+            "biz_no": company.biz_no if company else "",
+            "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}"}
 
 
 class ProfileIn(BaseModel):
@@ -142,6 +143,7 @@ class ProfileIn(BaseModel):
     email: str = ""
     company_name: str = ""
     biz_no: str = ""
+    quote_format: str = ""
 
     @field_validator("email")
     @classmethod
@@ -181,12 +183,16 @@ def update_profile(body: ProfileIn, payload: dict = Depends(get_current), db: Se
             company.name = body.company_name
         # biz_no는 빈값으로도 변경 허용
         company.biz_no = body.biz_no
+        if body.quote_format:
+            company.quote_format = body.quote_format
     db.commit(); db.refresh(user)
     # 이메일/이름이 바뀌면 토큰의 표시정보가 바뀌므로 새 토큰 재발급
     return {"token": make_token(user),
             "user": {"email": user.email, "name": user.name, "role": user.role,
                      "company": company.name if company else "",
-                     "plan": company.plan if company else "free"}}
+                     "plan": company.plan if company else "free",
+                     "biz_no": company.biz_no if company else "",
+                     "quote_format": company.quote_format if company else "Q-{YYYY}-{seq}"}}
 
 
 @router.put("/password")
