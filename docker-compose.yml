@@ -6,10 +6,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-    environment:
-      - ERP_SECRET=change-this-secret
-      - ERP_USER=admin
-      - ERP_PASS=admin1234
+    env_file:
+      - .env
     networks:
       - security-portal_default
 
