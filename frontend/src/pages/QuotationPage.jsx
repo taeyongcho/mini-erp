@@ -32,8 +32,18 @@ const EXPIRE_PRESETS = [3, 5, 7, 14, 30]
 
 export default function QuotationPage({ onNav, renderLayout, user }) {
   const { data, refresh, showToast } = useData()
-  const { quotations, customers } = data
+  const { quotations, customers, products = [] } = data
   const quoteFormat = user?.quote_format || 'Q-{YYYY}-{seq}'
+
+  const saveProduct = async (it) => {
+    if (!it.name?.trim()) return showToast('품목명이 비어있습니다','error')
+    if (products.some(p => p.name === it.name)) return showToast('이미 등록된 품목입니다','error')
+    const code = `PRD-${String(products.length+1).padStart(3,'0')}`
+    try {
+      await api.createProduct({ code, name: it.name, unit:'개', price: Number(it.price)||0, tax:true })
+      await refresh(); showToast(`'${it.name}' 품목관리에 등록되었습니다`)
+    } catch(e){ showToast(e.message,'error') }
+  }
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
@@ -293,7 +303,7 @@ export default function QuotationPage({ onNav, renderLayout, user }) {
           )}
         </div>
 
-        <LineEditor items={items} onChange={setItems} />
+        <LineEditor items={items} onChange={setItems} products={products} onSaveProduct={saveProduct} />
         <Summary items={items} />
         <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
           <Btn onClick={()=>setModal(null)}>취소</Btn>

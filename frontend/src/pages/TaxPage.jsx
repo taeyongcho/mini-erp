@@ -30,8 +30,16 @@ function printDoc() {
 
 export default function TaxPage({ renderLayout, user }) {
   const { data, refresh, showToast } = useData()
-  const { taxes, customers, orders } = data
+  const { taxes, customers, orders, products = [] } = data
   const taxFormat = user?.tax_format || 'TAX-{YYYY}-{seq}'
+
+  const saveProduct = async (it) => {
+    if (!it.name?.trim()) return showToast('품목명이 비어있습니다','error')
+    if (products.some(p => p.name === it.name)) return showToast('이미 등록된 품목입니다','error')
+    const code = `PRD-${String(products.length+1).padStart(3,'0')}`
+    try { await api.createProduct({ code, name: it.name, unit:'개', price: Number(it.price)||0, tax:true }); await refresh(); showToast(`'${it.name}' 품목관리에 등록되었습니다`) }
+    catch(e){ showToast(e.message,'error') }
+  }
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modal, setModal] = useState(null)
@@ -163,7 +171,7 @@ export default function TaxPage({ renderLayout, user }) {
           <FormGroup label="상태"><Select value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={TAX_STATUSES} /></FormGroup>
           <FormGroup label="비고"><Input value={form.note} onChange={v=>setForm(f=>({...f,note:v}))} /></FormGroup>
         </FormGrid>
-        <LineEditor items={items} onChange={setItems} />
+        <LineEditor items={items} onChange={setItems} products={products} onSaveProduct={saveProduct} />
         <Summary items={items} />
         <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:24,paddingTop:20,borderTop:'1px solid var(--border)'}}>
           <Btn onClick={()=>setModal(null)}>취소</Btn>

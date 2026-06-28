@@ -169,10 +169,21 @@ export function TableWrap({ title, count, searchVal, onSearch, filterEl, childre
 export const Th = ({children, right}) => <th style={{ padding:'10px 16px', textAlign: right?'right':'left', fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.7px', borderBottom:'1px solid var(--border)', background:'var(--surface2)', whiteSpace:'nowrap' }}>{children}</th>
 export const Td = ({children, mono, right, accent}) => <td style={{ padding:'11px 16px', borderBottom:'1px solid rgba(42,48,80,.5)', fontSize:12, fontFamily: mono?'var(--mono)':'var(--sans)', textAlign: right?'right':'left', color: accent?'var(--accent)':undefined }}>{children}</td>
 
-export function LineEditor({ items, onChange }) {
+export function LineEditor({ items, onChange, products = [], onSaveProduct }) {
+  const [listId] = useState(() => 'prod-' + Math.floor(Math.random() * 1e9))
   const update = (i, field, val) => { const next=[...items]; next[i]={...next[i],[field]:val}; onChange(next) }
   const addRow = () => onChange([...items, { name:'', qty:'', price:'' }])
   const remove = (i) => onChange(items.filter((_,j)=>j!==i))
+  // 품목명 입력 시 등록 품목과 정확히 일치하면 단가 자동 채움(단가 비어있을 때만)
+  const onName = (i, v) => {
+    const next=[...items]; next[i]={...next[i], name:v}
+    const p = products.find(x => x.name === v)
+    if (p && (next[i].price === '' || next[i].price === undefined || Number(next[i].price) === 0)) {
+      next[i].price = p.price
+      if (!next[i].qty) next[i].qty = 1
+    }
+    onChange(next)
+  }
   const cellInput = (i, field, { num=false, right=false, ph='' }={}) => (
     <input value={items[i]?.[field]??''} placeholder={ph} inputMode={num?'numeric':'text'}
       onChange={e=>{ const v=e.target.value; update(i, field, num ? v.replace(/[^0-9.]/g,'') : v) }}
@@ -180,9 +191,11 @@ export function LineEditor({ items, onChange }) {
       onFocus={e=>{ e.target.style.borderColor='var(--border)'; e.target.style.background='var(--surface2)' }}
       onBlur={e=>{ e.target.style.borderColor='transparent'; e.target.style.background='transparent' }} />
   )
+  const hasProducts = products.length > 0
   return (
     <div style={{ margin:'20px 0' }}>
-      <div style={{ fontSize:12, color:'var(--label)', textTransform:'uppercase', letterSpacing:'.7px', marginBottom:10 }}>품목 명세</div>
+      <div style={{ fontSize:12, color:'var(--label)', textTransform:'uppercase', letterSpacing:'.7px', marginBottom:10 }}>품목 명세 {hasProducts && <span style={{textTransform:'none',letterSpacing:0,color:'var(--muted)'}}>· 품목명에 등록품목 검색 가능</span>}</div>
+      {hasProducts && <datalist id={listId}>{products.map(p=><option key={p.id} value={p.name} />)}</datalist>}
       <table style={{ width:'100%', borderCollapse:'collapse' }}>
         <thead>
           <tr>{[['품목명','left'],['수량','right'],['단가(원)','right'],['금액(원)','right'],['','right']].map(([h,al],i)=><th key={i} style={{ padding:'8px 10px', fontSize:10, color:'var(--muted)', textAlign:al, borderBottom:'1px solid var(--border)', background:'var(--surface2)' }}>{h}</th>)}</tr>
@@ -190,11 +203,20 @@ export function LineEditor({ items, onChange }) {
         <tbody>
           {items.map((it,i)=>(
             <tr key={i} style={{ borderBottom:'1px solid rgba(42,48,80,.4)' }}>
-              <td style={{ padding:'4px 4px', width:'48%' }}>{cellInput(i,'name',{ph:'품목명 입력'})}</td>
+              <td style={{ padding:'4px 4px', width:'46%' }}>
+                <input value={it.name??''} placeholder="품목명 입력" list={hasProducts?listId:undefined}
+                  onChange={e=>onName(i, e.target.value)}
+                  style={{ background:'transparent', border:'1px solid transparent', borderRadius:4, padding:'5px 8px', color:'var(--text)', fontFamily:'var(--sans)', fontSize:12, outline:'none', width:'100%' }}
+                  onFocus={e=>{ e.target.style.borderColor='var(--border)'; e.target.style.background='var(--surface2)' }}
+                  onBlur={e=>{ e.target.style.borderColor='transparent'; e.target.style.background='transparent' }} />
+              </td>
               <td style={{ padding:'4px 4px', width:'13%' }}>{cellInput(i,'qty',{num:true,right:true,ph:'0'})}</td>
-              <td style={{ padding:'4px 4px', width:'20%' }}>{cellInput(i,'price',{num:true,right:true,ph:'0'})}</td>
-              <td style={{ padding:'4px 8px', width:'17%', fontFamily:'var(--mono)', fontSize:12, textAlign:'right', color:'var(--accent)' }}>{((Number(it.qty)||0)*(Number(it.price)||0)).toLocaleString('ko-KR')}</td>
-              <td style={{ padding:'4px 8px', width:36, textAlign:'right' }}><button onClick={()=>remove(i)} title="행 삭제" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:14 }}>🗑</button></td>
+              <td style={{ padding:'4px 4px', width:'19%' }}>{cellInput(i,'price',{num:true,right:true,ph:'0'})}</td>
+              <td style={{ padding:'4px 8px', width:'16%', fontFamily:'var(--mono)', fontSize:12, textAlign:'right', color:'var(--accent)' }}>{((Number(it.qty)||0)*(Number(it.price)||0)).toLocaleString('ko-KR')}</td>
+              <td style={{ padding:'4px 8px', width:60, textAlign:'right', whiteSpace:'nowrap' }}>
+                {onSaveProduct && <button onClick={()=>onSaveProduct(it)} title="품목관리에 저장" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:14, marginRight:4 }}>📌</button>}
+                <button onClick={()=>remove(i)} title="행 삭제" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:14 }}>🗑</button>
+              </td>
             </tr>
           ))}
         </tbody>

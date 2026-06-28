@@ -55,8 +55,16 @@ const DEFAULT_WARRANTY = '납품일로부터 1년간 하자보증'
 
 export default function ContractPage({ onNav, renderLayout, user }) {
   const { data, refresh, showToast } = useData()
-  const { contracts, customers, quotations } = data
+  const { contracts, customers, quotations, products = [] } = data
   const contractFormat = user?.contract_format || 'CT-{YYYY}-{seq}'
+
+  const saveProduct = async (it) => {
+    if (!it.name?.trim()) return showToast('품목명이 비어있습니다','error')
+    if (products.some(p => p.name === it.name)) return showToast('이미 등록된 품목입니다','error')
+    const code = `PRD-${String(products.length+1).padStart(3,'0')}`
+    try { await api.createProduct({ code, name: it.name, unit:'개', price: Number(it.price)||0, tax:true }); await refresh(); showToast(`'${it.name}' 품목관리에 등록되었습니다`) }
+    catch(e){ showToast(e.message,'error') }
+  }
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
@@ -335,7 +343,7 @@ export default function ContractPage({ onNav, renderLayout, user }) {
 
         {tab==='items' && (
           <>
-            <LineEditor items={items} onChange={setItems} />
+            <LineEditor items={items} onChange={setItems} products={products} onSaveProduct={saveProduct} />
             <Summary items={items} />
           </>
         )}
