@@ -5,9 +5,23 @@ import { calcItems } from '../utils/index.js'
 const CONTRACT_STATUS = { reviewing:'검토중', waiting_sign:'서명대기', active:'계약중', renewing:'갱신예정', expired:'만료', terminated:'해지' }
 const CONTRACT_COLOR = { reviewing:'var(--muted)', waiting_sign:'var(--accent)', active:'var(--success)', renewing:'var(--accent2)', expired:'var(--warn)', terminated:'var(--danger)' }
 
+function monthKey(dateStr) {
+  return dateStr ? dateStr.slice(0, 7) : ''
+}
+
+function last6Months() {
+  const months = []
+  const now = new Date()
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  return months
+}
+
 export default function Dashboard({ onNav, renderLayout }) {
   const { data } = useData()
-  const { quotations, contracts, orders, taxes, customers } = data
+  const { quotations, contracts, orders, taxes, customers, receivables = [], payables = [], accounts = [] } = data
   const totalQ = quotations.reduce((s,q)=>s+calcItems(q.items||[]).total,0)
   const totalC = contracts.reduce((s,c)=>s+(c.amount||0),0)
   const totalO = orders.reduce((s,o)=>s+calcItems(o.items||[]).total,0)
@@ -15,6 +29,24 @@ export default function Dashboard({ onNav, renderLayout }) {
   const pendingTax = taxes.filter(t=>t.status==='pending').length
   const waitingSign = contracts.filter(c=>c.status==='waiting_sign').length
   const expiringSoon = contracts.filter(c=>c.status==='active'&&c.days_left!==null&&c.days_left>=0&&c.days_left<=30).length
+
+  // 자금현황
+  const totalReceivable = receivables.filter(r => r.status !== 'settled').reduce((s, r) => s + (r.remaining || 0), 0)
+  const totalPayable = payables.filter(p => p.status !== 'settled').reduce((s, p) => s + (p.remaining || 0), 0)
+  const totalAccountBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0)
+  const netFund = totalAccountBalance + totalReceivable - totalPayable
+
+  // 월별 손익
+  const months = last6Months()
+  const monthlyData = months.map(m => {
+    const sales = taxes.filter(t => t.status === 'issued' && monthKey(t.date) === m)
+      .reduce((s, t) => s + (t.supply || 0) + (t.vat || 0), 0)
+    const purchase = orders.filter(o => o.status === 'completed' && monthKey(o.date) === m)
+      .reduce((s, o) => s + calcItems(o.items || []).total, 0)
+    const profit = sales - purchase
+    const rate = sales > 0 ? (profit / sales * 100).toFixed(1) : '-'
+    return { month: m, sales, purchase, profit, rate }
+  })
 
   const RecentItem = ({ icon, iconBg, name, sub, amount, badge, onClick }) => (
     <div onClick={onClick} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px', borderBottom:'1px solid rgba(42,48,80,.4)', cursor:'pointer' }}
@@ -38,11 +70,18 @@ export default function Dashboard({ onNav, renderLayout }) {
 
   return renderLayout(null, (
     <div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:16 }}>
         <StatCard label="견적 총액" value={fmtW(totalQ)} sub={`${quotations.length}건`} color="var(--accent)" />
         <StatCard label="계약 총액" value={fmtW(totalC)} sub={`서명대기 ${waitingSign}건`} color="var(--accent2)" />
         <StatCard label="발주 총액" value={fmtW(totalO)} sub={`${orders.length}건`} color="var(--warn)" />
         <StatCard label="세금계산서" value={fmtW(totalT)} sub={`미발행 ${pendingTax}건`} color="var(--success)" />
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:16 }}>
+        <StatCard label="받을돈" value={fmtW(totalReceivable)} sub="미수 잔액" color="var(--warn)" />
+        <StatCard label="줄돈" value={fmtW(totalPayable)} sub="미지급 잔액" color="var(--danger)" />
+        <StatCard label="계좌잔액" value={fmtW(totalAccountBalance)} sub={`${accounts.length}개 계좌`} color="var(--accent2)" />
+        <StatCard label="순자금" value={fmtW(netFund)} sub="계좌+받을돈-줄돈" color={netFund >= 0 ? 'var(--success)' : 'var(--danger)'} />
       </div>
 
       {expiringSoon > 0 && (
@@ -52,6 +91,31 @@ export default function Dashboard({ onNav, renderLayout }) {
           <button onClick={()=>onNav('contract')} style={{ marginLeft:'auto', background:'none', border:'1px solid var(--warn)', color:'var(--warn)', borderRadius:6, padding:'4px 12px', fontSize:11, cursor:'pointer', fontFamily:'var(--sans)' }}>확인하기</button>
         </div>
       )}
+
+      <Box title="📊 월별 손익 (최근 6개월)">
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                {['월','매출','매입','수익','이익률'].map(h => (
+                  <th key={h} style={{ padding:'10px 16px', textAlign: h==='월'?'left':'right', fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.7px', borderBottom:'1px solid var(--border)', background:'var(--surface2)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyData.map(m => (
+                <tr key={m.month} style={{ borderBottom:'1px solid rgba(42,48,80,.3)' }}>
+                  <td style={{ padding:'10px 16px', fontSize:12 }}>{m.month}</td>
+                  <td style={{ padding:'10px 16px', textAlign:'right', fontFamily:'var(--mono)', fontSize:12, color:'var(--accent)' }}>{fmtW(m.sales)}</td>
+                  <td style={{ padding:'10px 16px', textAlign:'right', fontFamily:'var(--mono)', fontSize:12, color:'var(--warn)' }}>{fmtW(m.purchase)}</td>
+                  <td style={{ padding:'10px 16px', textAlign:'right', fontFamily:'var(--mono)', fontSize:12, color: m.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtW(m.profit)}</td>
+                  <td style={{ padding:'10px 16px', textAlign:'right', fontSize:12, color:'var(--muted)' }}>{m.rate !== '-' ? `${m.rate}%` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Box>
 
       <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:20 }}>
         <div>

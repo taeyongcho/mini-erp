@@ -25,7 +25,7 @@ export function Layout({ page, onNav, topbarActions, children, badges }) {
       {badges?.[id] > 0 && <span style={s.navBadge}>{badges[id]}</span>}
     </div>
   )
-  const titles = { dashboard:'대시보드', quotation:'견적서 관리', contract:'계약서 관리', order:'발주서 관리', tax:'세금계산서 관리', customer:'거래처 관리', product:'품목 관리' }
+  const titles = { dashboard:'대시보드', quotation:'견적서 관리', contract:'계약서 관리', order:'발주서 관리', tax:'세금계산서 관리', customer:'거래처 관리', product:'품목 관리', receivable:'미수금 관리', payable:'미지급금 관리', account:'계좌 관리', convert:'견적 변환' }
   return (
     <div style={s.app}>
       <nav style={s.sidebar}>
@@ -37,6 +37,11 @@ export function Layout({ page, onNav, topbarActions, children, badges }) {
         {nav('contract','📝','계약서')}
         {nav('order','📦','발주서')}
         {nav('tax','🧾','세금계산서')}
+        <div style={s.sideSection}>자금관리</div>
+        {nav('receivable','💰','미수금')}
+        {nav('payable','💸','미지급금')}
+        {nav('account','🏦','계좌관리')}
+        {nav('convert','🔄','견적변환')}
         <div style={s.sideSection}>관리</div>
         {nav('customer','🏢','거래처')}
         {nav('product','🗂️','품목관리')}

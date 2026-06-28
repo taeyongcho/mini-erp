@@ -8,6 +8,10 @@ import OrderPage from './pages/OrderPage.jsx'
 import TaxPage from './pages/TaxPage.jsx'
 import CustomerPage from './pages/CustomerPage.jsx'
 import ProductPage from './pages/ProductPage.jsx'
+import ReceivablePage from './pages/ReceivablePage.jsx'
+import PayablePage from './pages/PayablePage.jsx'
+import AccountPage from './pages/AccountPage.jsx'
+import ConvertPage from './pages/ConvertPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 
 const pages = {
@@ -18,6 +22,10 @@ const pages = {
   tax: TaxPage,
   customer: CustomerPage,
   product: ProductPage,
+  receivable: ReceivablePage,
+  payable: PayablePage,
+  account: AccountPage,
+  convert: ConvertPage,
 }
 
 function AppInner({ user, onLogout }) {
@@ -29,6 +37,8 @@ function AppInner({ user, onLogout }) {
     contract: data.contracts.filter(c => c.status === 'waiting_sign').length,
     order: data.orders.filter(o => o.status === 'ordered').length,
     tax: data.taxes.filter(t => t.status === 'pending').length,
+    receivable: (data.receivables || []).filter(r => r.status !== 'settled').length,
+    payable: (data.payables || []).filter(p => p.status !== 'settled').length,
   }
 
   const Page = pages[page] || Dashboard
